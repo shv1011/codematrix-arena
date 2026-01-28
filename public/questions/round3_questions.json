@@ -1,0 +1,541 @@
+{
+  "round_info": {
+    "round_number": 3,
+    "round_name": "Code Jeopardy",
+    "round_type": "jeopardy",
+    "time_limit_seconds": 5400,
+    "grid_size": "7x5",
+    "description": "Jeopardy-style coding questions organized by categories with increasing difficulty and reward points."
+  },
+  "categories": {
+    "DSA": {
+      "name": "Data Structures & Algorithms",
+      "questions": [
+        {
+          "points": 100,
+          "reward": 110,
+          "difficulty": "easy",
+          "question": "Implement a function to find the length of a linked list.",
+          "sample_input": "LinkedList: 1 -> 2 -> 3 -> null",
+          "sample_output": "3",
+          "test_cases": [
+            {
+              "input": "1->2->3->null",
+              "expected_output": "3"
+            },
+            {
+              "input": "null",
+              "expected_output": "0"
+            }
+          ]
+        },
+        {
+          "points": 200,
+          "reward": 250,
+          "difficulty": "easy-medium",
+          "question": "Write a function to reverse a linked list iteratively.",
+          "sample_input": "LinkedList: 1 -> 2 -> 3 -> null",
+          "sample_output": "3 -> 2 -> 1 -> null",
+          "test_cases": [
+            {
+              "input": "1->2->3->null",
+              "expected_output": "3->2->1->null"
+            }
+          ]
+        },
+        {
+          "points": 400,
+          "reward": 470,
+          "difficulty": "medium",
+          "question": "Implement binary search on a rotated sorted array.",
+          "sample_input": "[4,5,6,7,0,1,2], target = 0",
+          "sample_output": "4",
+          "test_cases": [
+            {
+              "input": "[4,5,6,7,0,1,2], 0",
+              "expected_output": "4"
+            }
+          ]
+        },
+        {
+          "points": 700,
+          "reward": 1000,
+          "difficulty": "hard",
+          "question": "Find the median of two sorted arrays in O(log(min(m,n))) time.",
+          "sample_input": "[1,3], [2]",
+          "sample_output": "2.0",
+          "test_cases": [
+            {
+              "input": "[1,3], [2]",
+              "expected_output": "2.0"
+            }
+          ]
+        },
+        {
+          "points": 1000,
+          "reward": 2500,
+          "difficulty": "extreme",
+          "question": "Implement a data structure that supports insert, delete, and getRandom in O(1) time.",
+          "sample_input": "insert(1), insert(2), getRandom(), delete(1), getRandom()",
+          "sample_output": "Various based on random selection",
+          "test_cases": [
+            {
+              "input": "insert(1), insert(2), delete(1)",
+              "expected_output": "Should maintain O(1) operations"
+            }
+          ]
+        }
+      ]
+    },
+    "OOPS": {
+      "name": "Object-Oriented Programming",
+      "questions": [
+        {
+          "points": 100,
+          "reward": 110,
+          "difficulty": "easy",
+          "question": "Create a simple class with constructor and a method.",
+          "sample_input": "Class Person with name and greet method",
+          "sample_output": "Hello, my name is [name]",
+          "test_cases": [
+            {
+              "input": "Person('Alice').greet()",
+              "expected_output": "Hello, my name is Alice"
+            }
+          ]
+        },
+        {
+          "points": 200,
+          "reward": 250,
+          "difficulty": "easy-medium",
+          "question": "Implement inheritance with method overriding.",
+          "sample_input": "Animal class and Dog subclass",
+          "sample_output": "Dog-specific behavior",
+          "test_cases": [
+            {
+              "input": "Dog().makeSound()",
+              "expected_output": "Woof!"
+            }
+          ]
+        },
+        {
+          "points": 400,
+          "reward": 470,
+          "difficulty": "medium",
+          "question": "Design a singleton pattern implementation.",
+          "sample_input": "Singleton class with getInstance method",
+          "sample_output": "Same instance returned always",
+          "test_cases": [
+            {
+              "input": "Singleton.getInstance() === Singleton.getInstance()",
+              "expected_output": "true"
+            }
+          ]
+        },
+        {
+          "points": 700,
+          "reward": 1000,
+          "difficulty": "hard",
+          "question": "Implement a factory pattern with multiple product types.",
+          "sample_input": "ShapeFactory creating Circle, Square, Triangle",
+          "sample_output": "Appropriate shape objects",
+          "test_cases": [
+            {
+              "input": "ShapeFactory.create('circle')",
+              "expected_output": "Circle object with area method"
+            }
+          ]
+        },
+        {
+          "points": 1000,
+          "reward": 2500,
+          "difficulty": "extreme",
+          "question": "Design an observer pattern with multiple observers and subjects.",
+          "sample_input": "Subject notifying multiple observers",
+          "sample_output": "All observers updated correctly",
+          "test_cases": [
+            {
+              "input": "Subject with 3 observers, state change",
+              "expected_output": "All 3 observers notified"
+            }
+          ]
+        }
+      ]
+    },
+    "DBMS": {
+      "name": "Database Management Systems",
+      "questions": [
+        {
+          "points": 100,
+          "reward": 110,
+          "difficulty": "easy",
+          "question": "Write a SQL query to select all records from a table.",
+          "sample_input": "Table: users",
+          "sample_output": "SELECT * FROM users;",
+          "test_cases": [
+            {
+              "input": "users table",
+              "expected_output": "SELECT * FROM users;"
+            }
+          ]
+        },
+        {
+          "points": 200,
+          "reward": 250,
+          "difficulty": "easy-medium",
+          "question": "Write a query to find the second highest salary.",
+          "sample_input": "Table: employees(id, name, salary)",
+          "sample_output": "SQL query returning second highest salary",
+          "test_cases": [
+            {
+              "input": "employees table with salaries",
+              "expected_output": "Query using LIMIT and OFFSET or subquery"
+            }
+          ]
+        },
+        {
+          "points": 400,
+          "reward": 470,
+          "difficulty": "medium",
+          "question": "Design a normalized database schema for a library system.",
+          "sample_input": "Books, Authors, Members, Borrowing records",
+          "sample_output": "Normalized tables with relationships",
+          "test_cases": [
+            {
+              "input": "Library requirements",
+              "expected_output": "3NF normalized schema"
+            }
+          ]
+        },
+        {
+          "points": 700,
+          "reward": 1000,
+          "difficulty": "hard",
+          "question": "Write a query to find employees with salary higher than their department average.",
+          "sample_input": "employees(id, name, salary, dept_id)",
+          "sample_output": "Complex SQL with subqueries",
+          "test_cases": [
+            {
+              "input": "employees and departments data",
+              "expected_output": "Query with correlated subquery or window functions"
+            }
+          ]
+        },
+        {
+          "points": 1000,
+          "reward": 2500,
+          "difficulty": "extreme",
+          "question": "Design and implement a database transaction with ACID properties handling.",
+          "sample_input": "Banking system with transfers",
+          "sample_output": "Transaction implementation with rollback",
+          "test_cases": [
+            {
+              "input": "Transfer between accounts",
+              "expected_output": "ACID compliant transaction"
+            }
+          ]
+        }
+      ]
+    },
+    "OS": {
+      "name": "Operating Systems",
+      "questions": [
+        {
+          "points": 100,
+          "reward": 110,
+          "difficulty": "easy",
+          "question": "Explain the difference between process and thread.",
+          "sample_input": "Conceptual question",
+          "sample_output": "Clear explanation with examples",
+          "test_cases": [
+            {
+              "input": "Process vs Thread",
+              "expected_output": "Memory space, creation overhead, communication differences"
+            }
+          ]
+        },
+        {
+          "points": 200,
+          "reward": 250,
+          "difficulty": "easy-medium",
+          "question": "Implement a simple round-robin scheduler simulation.",
+          "sample_input": "Processes with burst times",
+          "sample_output": "Execution order and waiting times",
+          "test_cases": [
+            {
+              "input": "P1(4), P2(3), P3(1) with quantum=2",
+              "expected_output": "Execution sequence and average waiting time"
+            }
+          ]
+        },
+        {
+          "points": 400,
+          "reward": 470,
+          "difficulty": "medium",
+          "question": "Solve the producer-consumer problem using semaphores.",
+          "sample_input": "Buffer size and producer/consumer counts",
+          "sample_output": "Synchronization solution",
+          "test_cases": [
+            {
+              "input": "Buffer size 5, 2 producers, 3 consumers",
+              "expected_output": "Deadlock-free synchronization code"
+            }
+          ]
+        },
+        {
+          "points": 700,
+          "reward": 1000,
+          "difficulty": "hard",
+          "question": "Implement a page replacement algorithm (LRU or Optimal).",
+          "sample_input": "Page reference string and frame count",
+          "sample_output": "Page faults and replacement decisions",
+          "test_cases": [
+            {
+              "input": "Pages: 1,2,3,4,1,2,5,1,2,3,4,5 with 3 frames",
+              "expected_output": "Page fault count and frame states"
+            }
+          ]
+        },
+        {
+          "points": 1000,
+          "reward": 2500,
+          "difficulty": "extreme",
+          "question": "Design a deadlock detection and recovery algorithm.",
+          "sample_input": "Resource allocation graph",
+          "sample_output": "Deadlock detection and recovery strategy",
+          "test_cases": [
+            {
+              "input": "Multiple processes and resources",
+              "expected_output": "Cycle detection and victim selection"
+            }
+          ]
+        }
+      ]
+    },
+    "WEB": {
+      "name": "Web Development",
+      "questions": [
+        {
+          "points": 100,
+          "reward": 110,
+          "difficulty": "easy",
+          "question": "Create a simple HTML form with validation.",
+          "sample_input": "Form with name, email, password fields",
+          "sample_output": "HTML with basic validation",
+          "test_cases": [
+            {
+              "input": "User registration form",
+              "expected_output": "HTML form with required attributes"
+            }
+          ]
+        },
+        {
+          "points": 200,
+          "reward": 250,
+          "difficulty": "easy-medium",
+          "question": "Implement a responsive CSS layout using Flexbox.",
+          "sample_input": "3-column layout that stacks on mobile",
+          "sample_output": "CSS with media queries",
+          "test_cases": [
+            {
+              "input": "Desktop and mobile layouts",
+              "expected_output": "Responsive flexbox CSS"
+            }
+          ]
+        },
+        {
+          "points": 400,
+          "reward": 470,
+          "difficulty": "medium",
+          "question": "Create a JavaScript function to debounce API calls.",
+          "sample_input": "Search input with API calls",
+          "sample_output": "Debounced function implementation",
+          "test_cases": [
+            {
+              "input": "Rapid keystrokes in search box",
+              "expected_output": "API called only after delay"
+            }
+          ]
+        },
+        {
+          "points": 700,
+          "reward": 1000,
+          "difficulty": "hard",
+          "question": "Implement a custom Promise-based HTTP client.",
+          "sample_input": "GET, POST, PUT, DELETE methods",
+          "sample_output": "Promise-based HTTP client class",
+          "test_cases": [
+            {
+              "input": "Various HTTP requests",
+              "expected_output": "Working HTTP client with error handling"
+            }
+          ]
+        },
+        {
+          "points": 1000,
+          "reward": 2500,
+          "difficulty": "extreme",
+          "question": "Build a real-time chat application with WebSockets.",
+          "sample_input": "Multiple users, rooms, message history",
+          "sample_output": "Full-stack chat implementation",
+          "test_cases": [
+            {
+              "input": "Multiple users in different rooms",
+              "expected_output": "Real-time messaging with room isolation"
+            }
+          ]
+        }
+      ]
+    },
+    "ALGO": {
+      "name": "Advanced Algorithms",
+      "questions": [
+        {
+          "points": 100,
+          "reward": 110,
+          "difficulty": "easy",
+          "question": "Implement bubble sort algorithm.",
+          "sample_input": "[64, 34, 25, 12, 22, 11, 90]",
+          "sample_output": "[11, 12, 22, 25, 34, 64, 90]",
+          "test_cases": [
+            {
+              "input": "[64, 34, 25, 12, 22, 11, 90]",
+              "expected_output": "[11, 12, 22, 25, 34, 64, 90]"
+            }
+          ]
+        },
+        {
+          "points": 200,
+          "reward": 250,
+          "difficulty": "easy-medium",
+          "question": "Find the longest common subsequence of two strings.",
+          "sample_input": "ABCDGH, AEDFHR",
+          "sample_output": "ADH (length 3)",
+          "test_cases": [
+            {
+              "input": "ABCDGH, AEDFHR",
+              "expected_output": "3"
+            }
+          ]
+        },
+        {
+          "points": 400,
+          "reward": 470,
+          "difficulty": "medium",
+          "question": "Implement Dijkstra's shortest path algorithm.",
+          "sample_input": "Weighted graph with source vertex",
+          "sample_output": "Shortest distances to all vertices",
+          "test_cases": [
+            {
+              "input": "Graph with 6 vertices and weighted edges",
+              "expected_output": "Array of shortest distances"
+            }
+          ]
+        },
+        {
+          "points": 700,
+          "reward": 1000,
+          "difficulty": "hard",
+          "question": "Solve the 0/1 Knapsack problem using dynamic programming.",
+          "sample_input": "Items with weights and values, knapsack capacity",
+          "sample_output": "Maximum value achievable",
+          "test_cases": [
+            {
+              "input": "weights=[1,3,4,5], values=[1,4,5,7], capacity=7",
+              "expected_output": "9"
+            }
+          ]
+        },
+        {
+          "points": 1000,
+          "reward": 2500,
+          "difficulty": "extreme",
+          "question": "Implement the A* pathfinding algorithm.",
+          "sample_input": "2D grid with obstacles, start and end points",
+          "sample_output": "Optimal path from start to end",
+          "test_cases": [
+            {
+              "input": "10x10 grid with obstacles",
+              "expected_output": "Shortest path coordinates"
+            }
+          ]
+        }
+      ]
+    },
+    "ML": {
+      "name": "Machine Learning",
+      "questions": [
+        {
+          "points": 100,
+          "reward": 110,
+          "difficulty": "easy",
+          "question": "Implement linear regression from scratch.",
+          "sample_input": "X and y training data",
+          "sample_output": "Slope and intercept values",
+          "test_cases": [
+            {
+              "input": "Simple 2D dataset",
+              "expected_output": "Linear regression coefficients"
+            }
+          ]
+        },
+        {
+          "points": 200,
+          "reward": 250,
+          "difficulty": "easy-medium",
+          "question": "Calculate accuracy, precision, and recall for a classification model.",
+          "sample_input": "True labels and predicted labels",
+          "sample_output": "Accuracy, precision, recall values",
+          "test_cases": [
+            {
+              "input": "Binary classification results",
+              "expected_output": "Performance metrics"
+            }
+          ]
+        },
+        {
+          "points": 400,
+          "reward": 470,
+          "difficulty": "medium",
+          "question": "Implement k-means clustering algorithm.",
+          "sample_input": "Dataset and number of clusters k",
+          "sample_output": "Cluster centers and assignments",
+          "test_cases": [
+            {
+              "input": "2D points with k=3",
+              "expected_output": "3 cluster centers and point assignments"
+            }
+          ]
+        },
+        {
+          "points": 700,
+          "reward": 1000,
+          "difficulty": "hard",
+          "question": "Build a decision tree classifier from scratch.",
+          "sample_input": "Training dataset with features and labels",
+          "sample_output": "Decision tree structure and predictions",
+          "test_cases": [
+            {
+              "input": "Iris dataset",
+              "expected_output": "Decision tree with splitting criteria"
+            }
+          ]
+        },
+        {
+          "points": 1000,
+          "reward": 2500,
+          "difficulty": "extreme",
+          "question": "Implement a neural network with backpropagation.",
+          "sample_input": "Training data, network architecture",
+          "sample_output": "Trained network with weight updates",
+          "test_cases": [
+            {
+              "input": "XOR problem dataset",
+              "expected_output": "Neural network solving XOR"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

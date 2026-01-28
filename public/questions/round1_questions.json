@@ -1,0 +1,87 @@
+{
+  "round_info": {
+    "round_number": 1,
+    "round_name": "Aptitude Arena",
+    "round_type": "quiz",
+    "time_limit_seconds": 1800,
+    "total_questions": 20,
+    "description": "Multiple choice questions covering programming concepts, data structures, algorithms, and computer science fundamentals."
+  },
+  "questions": [
+    {
+      "id": 1,
+      "question": "What is the time complexity of binary search in a sorted array?",
+      "options": [
+        "O(n)",
+        "O(log n)",
+        "O(n²)",
+        "O(1)"
+      ],
+      "correct_answer": 1,
+      "points": 10,
+      "category": "Algorithms",
+      "difficulty": "easy",
+      "explanation": "Binary search divides the search space in half with each comparison, resulting in O(log n) time complexity."
+    },
+    {
+      "id": 2,
+      "question": "Which data structure follows the Last In First Out (LIFO) principle?",
+      "options": [
+        "Queue",
+        "Stack",
+        "Array",
+        "Linked List"
+      ],
+      "correct_answer": 1,
+      "points": 10,
+      "category": "Data Structures",
+      "difficulty": "easy",
+      "explanation": "Stack follows LIFO principle where the last element added is the first one to be removed."
+    },
+    {
+      "id": 3,
+      "question": "What is the worst-case time complexity of QuickSort?",
+      "options": [
+        "O(n log n)",
+        "O(n²)",
+        "O(n)",
+        "O(log n)"
+      ],
+      "correct_answer": 1,
+      "points": 15,
+      "category": "Algorithms",
+      "difficulty": "medium",
+      "explanation": "QuickSort has O(n²) worst-case complexity when the pivot is always the smallest or largest element."
+    },
+    {
+      "id": 4,
+      "question": "In object-oriented programming, what does polymorphism allow?",
+      "options": [
+        "Creating multiple classes",
+        "Objects of different types to be treated as objects of a common base type",
+        "Hiding implementation details",
+        "Creating objects without classes"
+      ],
+      "correct_answer": 1,
+      "points": 15,
+      "category": "OOP",
+      "difficulty": "medium",
+      "explanation": "Polymorphism allows objects of different types to be treated uniformly through a common interface."
+    },
+    {
+      "id": 5,
+      "question": "What is the primary purpose of database normalization?",
+      "options": [
+        "Increase data redundancy",
+        "Reduce data redundancy and improve data integrity",
+        "Make queries slower",
+        "Increase storage space"
+      ],
+      "correct_answer": 1,
+      "points": 15,
+      "category": "Database",
+      "difficulty": "medium",
+      "explanation": "Normalization reduces redundancy and improves data integrity by organizing data efficiently."
+    }
+  ]
+}

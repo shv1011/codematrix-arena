@@ -1,0 +1,109 @@
+{
+  "round_info": {
+    "round_number": 2,
+    "round_name": "Constraint Paradox",
+    "round_type": "constraint",
+    "time_limit_seconds": 3600,
+    "total_questions": 10,
+    "description": "Coding problems with specific constraints that restrict the use of certain keywords, functions, or approaches."
+  },
+  "questions": [
+    {
+      "id": 1,
+      "question": "Write a function to reverse a string without using any built-in reverse methods or loops.",
+      "constraints": [
+        "No using reverse() method",
+        "No using for/while loops",
+        "No using array methods like map, forEach, etc."
+      ],
+      "sample_input": "hello",
+      "sample_output": "olleh",
+      "points": 50,
+      "category": "String Manipulation",
+      "difficulty": "medium",
+      "test_cases": [
+        {
+          "input": "hello",
+          "expected_output": "olleh"
+        },
+        {
+          "input": "world",
+          "expected_output": "dlrow"
+        },
+        {
+          "input": "a",
+          "expected_output": "a"
+        },
+        {
+          "input": "",
+          "expected_output": ""
+        }
+      ],
+      "evaluation_criteria": "Function should use recursion or other creative approaches to reverse the string without violating constraints."
+    },
+    {
+      "id": 2,
+      "question": "Implement a function to find the maximum element in an array without using Math.max, comparison operators (>, <, >=, <=), or sorting.",
+      "constraints": [
+        "No using Math.max() or Math.min()",
+        "No using comparison operators (>, <, >=, <=)",
+        "No using sort() method",
+        "No using reduce() with comparison"
+      ],
+      "sample_input": "[3, 7, 2, 9, 1]",
+      "sample_output": "9",
+      "points": 75,
+      "category": "Array Operations",
+      "difficulty": "hard",
+      "test_cases": [
+        {
+          "input": "[3, 7, 2, 9, 1]",
+          "expected_output": "9"
+        },
+        {
+          "input": "[1]",
+          "expected_output": "1"
+        },
+        {
+          "input": "[-5, -2, -8, -1]",
+          "expected_output": "-1"
+        }
+      ],
+      "evaluation_criteria": "Function should use creative approaches like bit manipulation, mathematical operations, or other non-comparison methods."
+    },
+    {
+      "id": 3,
+      "question": "Write a function to check if a number is prime without using division (/) or modulo (%) operators.",
+      "constraints": [
+        "No using division (/) operator",
+        "No using modulo (%) operator",
+        "No using Math.sqrt() or similar functions",
+        "Must handle edge cases (1, 2, negative numbers)"
+      ],
+      "sample_input": "17",
+      "sample_output": "true",
+      "points": 100,
+      "category": "Mathematical Operations",
+      "difficulty": "hard",
+      "test_cases": [
+        {
+          "input": "17",
+          "expected_output": "true"
+        },
+        {
+          "input": "4",
+          "expected_output": "false"
+        },
+        {
+          "input": "2",
+          "expected_output": "true"
+        },
+        {
+          "input": "1",
+          "expected_output": "false"
+        }
+      ],
+      "evaluation_criteria": "Function should use multiplication, subtraction, or other creative mathematical approaches to determine primality."
+    }
+  ]
+}

@@ -14,6 +14,83 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_evaluation_log: {
+        Row: {
+          ai_prompt: string
+          ai_provider: string
+          ai_response: string
+          ai_score: number
+          created_at: string | null
+          evaluation_time_ms: number | null
+          id: string
+          question_id: string
+          question_text: string
+          round_id: string
+          submission_id: string
+          team_answer: string
+          team_id: string
+        }
+        Insert: {
+          ai_prompt: string
+          ai_provider: string
+          ai_response: string
+          ai_score: number
+          created_at?: string | null
+          evaluation_time_ms?: number | null
+          id?: string
+          question_id: string
+          question_text: string
+          round_id: string
+          submission_id: string
+          team_answer: string
+          team_id: string
+        }
+        Update: {
+          ai_prompt?: string
+          ai_provider?: string
+          ai_response?: string
+          ai_score?: number
+          created_at?: string | null
+          evaluation_time_ms?: number | null
+          id?: string
+          question_id?: string
+          question_text?: string
+          round_id?: string
+          submission_id?: string
+          team_answer?: string
+          team_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_evaluation_log_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_evaluation_log_round_id_fkey"
+            columns: ["round_id"]
+            isOneToOne: false
+            referencedRelation: "rounds"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_evaluation_log_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "submissions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_evaluation_log_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       game_state: {
         Row: {
           current_round: number | null
@@ -40,6 +117,61 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      question_locks: {
+        Row: {
+          expires_at: string
+          id: string
+          is_active: boolean | null
+          locked_at: string | null
+          question_id: string
+          released_at: string | null
+          round_id: string
+          team_id: string
+        }
+        Insert: {
+          expires_at: string
+          id?: string
+          is_active?: boolean | null
+          locked_at?: string | null
+          question_id: string
+          released_at?: string | null
+          round_id: string
+          team_id: string
+        }
+        Update: {
+          expires_at?: string
+          id?: string
+          is_active?: boolean | null
+          locked_at?: string | null
+          question_id?: string
+          released_at?: string | null
+          round_id?: string
+          team_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "question_locks_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "question_locks_round_id_fkey"
+            columns: ["round_id"]
+            isOneToOne: false
+            referencedRelation: "rounds"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "question_locks_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       questions: {
         Row: {
@@ -224,11 +356,13 @@ export type Database = {
         Row: {
           created_at: string | null
           current_round: number | null
+          eliminated_at: string | null
           id: string
           is_active: boolean | null
           is_disqualified: boolean | null
           leader_email: string
           password_hash: string
+          round_eliminated: number | null
           round1_score: number | null
           round2_score: number | null
           round3_score: number | null
@@ -240,11 +374,13 @@ export type Database = {
         Insert: {
           created_at?: string | null
           current_round?: number | null
+          eliminated_at?: string | null
           id?: string
           is_active?: boolean | null
           is_disqualified?: boolean | null
           leader_email: string
           password_hash: string
+          round_eliminated?: number | null
           round1_score?: number | null
           round2_score?: number | null
           round3_score?: number | null
@@ -256,11 +392,13 @@ export type Database = {
         Update: {
           created_at?: string | null
           current_round?: number | null
+          eliminated_at?: string | null
           id?: string
           is_active?: boolean | null
           is_disqualified?: boolean | null
           leader_email?: string
           password_hash?: string
+          round_eliminated?: number | null
           round1_score?: number | null
           round2_score?: number | null
           round3_score?: number | null
