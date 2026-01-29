@@ -2,6 +2,7 @@
 // Supports OpenAI GPT and Google Gemini APIs for code evaluation
 
 import { supabase } from "@/integrations/supabase/client";
+import { mockAIEvaluator } from "./mockAI";
 
 // Types for AI evaluation
 export interface EvaluationRequest {
@@ -330,10 +331,11 @@ export class AIEvaluationService {
   ): Promise<EvaluationResponse> {
     let lastError: Error | null = null;
     
-    // Try OpenAI first, then fallback to Gemini
+    // Try Gemini first (free), then fallback to OpenAI, then mock AI
     const evaluators = [
+      { evaluator: this.geminiEvaluator, provider: 'gemini' as const },
       { evaluator: this.openaiEvaluator, provider: 'openai' as const },
-      { evaluator: this.geminiEvaluator, provider: 'gemini' as const }
+      { evaluator: mockAIEvaluator, provider: 'mock' as const }
     ].filter(e => e.evaluator !== null);
 
     for (const { evaluator, provider } of evaluators) {
