@@ -337,3 +337,22 @@ Good luck, and may the best code win!
 
 // Export singleton instance
 export const emailService = new EmailService();
+
+// Convenience function for sending team credentials
+export async function sendTeamCredentials(credentials: {
+  teamName: string;
+  teamCode: string;
+  password: string;
+  leaderEmail: string;
+  loginUrl: string;
+}): Promise<boolean> {
+  const teamCredentials: TeamCredentials = {
+    team_name: credentials.teamName,
+    team_code: credentials.teamCode,
+    leader_email: credentials.leaderEmail,
+    password: credentials.password
+  };
+
+  const template = emailService.generateWelcomeEmail(teamCredentials);
+  return await emailService.sendEmail(credentials.leaderEmail, template);
+}

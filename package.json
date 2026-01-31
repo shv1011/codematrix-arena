@@ -13,6 +13,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@emailjs/browser": "^4.4.1",
     "@fontsource/jetbrains-mono": "^5.2.8",
     "@fontsource/orbitron": "^5.2.8",
     "@hookform/resolvers": "^3.10.0",

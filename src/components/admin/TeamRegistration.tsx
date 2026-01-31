@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { supabase } from "@/integrations/supabase/client";
+import { sendTeamCredentials } from "@/lib/emailJS";
 import { toast } from "sonner";
 import { 
   Users, 
@@ -106,7 +107,7 @@ export const TeamRegistration = () => {
     }));
   };
 
-  // Register single team
+  // Register single team with auto account creation
   const registerSingleTeam = async () => {
     if (!singleTeam.teamName || !singleTeam.leaderEmail) {
       toast.error("Team name and leader email are required");
@@ -119,7 +120,30 @@ export const TeamRegistration = () => {
       const password = generatePassword();
       const passwordHash = await hashPassword(password);
 
-      const { data, error } = await supabase
+      // Step 1: Create user account in Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+        email: singleTeam.leaderEmail,
+        password: password,
+        email_confirm: true,
+        user_metadata: {
+          team_name: singleTeam.teamName,
+          team_code: teamCode,
+          role: 'team_leader'
+        }
+      });
+
+      if (authError) {
+        console.error("Auth creation error:", authError);
+        // If user already exists, try to get existing user
+        if (authError.message.includes('already registered')) {
+          toast.error("A user with this email already exists. Please use a different email.");
+          return;
+        }
+        throw authError;
+      }
+
+      // Step 2: Create team record
+      const { data: teamData, error: teamError } = await supabase
         .from("teams")
         .insert({
           team_name: singleTeam.teamName,
@@ -137,10 +161,32 @@ export const TeamRegistration = () => {
         .select()
         .single();
 
-      if (error) throw error;
+      if (teamError) throw teamError;
 
-      // TODO: Send email with credentials
-      toast.success(`Team registered successfully! Code: ${teamCode}, Password: ${password}`);
+      // Step 3: Add user role
+      if (authData.user) {
+        const { error: roleError } = await supabase
+          .from("user_roles")
+          .insert({
+            user_id: authData.user.id,
+            role: 'user'
+          });
+
+        if (roleError) {
+          console.warn("Role assignment error:", roleError);
+        }
+      }
+
+      // Step 4: Send email with credentials
+      await sendTeamCredentials({
+        teamName: singleTeam.teamName,
+        teamCode: teamCode,
+        password: password,
+        leaderEmail: singleTeam.leaderEmail,
+        loginUrl: window.location.origin + '/login'
+      });
+
+      toast.success(`Team registered successfully! Account created and credentials sent to ${singleTeam.leaderEmail}`);
       
       // Reset form
       setSingleTeam({
@@ -153,7 +199,7 @@ export const TeamRegistration = () => {
 
     } catch (error) {
       console.error("Registration error:", error);
-      toast.error("Failed to register team");
+      toast.error("Failed to register team: " + (error as Error).message);
     } finally {
       setIsLoading(false);
     }
@@ -178,7 +224,7 @@ export const TeamRegistration = () => {
     reader.readAsText(file);
   };
 
-  // Register bulk teams
+  // Register bulk teams with auto account creation
   const registerBulkTeams = async () => {
     if (bulkTeams.length === 0) {
       toast.error("No teams to register");
@@ -194,33 +240,82 @@ export const TeamRegistration = () => {
         const password = generatePassword();
         const passwordHash = await hashPassword(password);
 
-        const { data, error } = await supabase
-          .from("teams")
-          .insert({
-            team_name: team.teamName,
-            team_code: teamCode,
-            leader_email: team.leaderEmail,
-            password_hash: passwordHash,
-            is_active: true,
-            is_disqualified: false,
-            current_round: 0,
-            total_score: 0,
-            round1_score: 0,
-            round2_score: 0,
-            round3_score: 0
-          })
-          .select()
-          .single();
+        try {
+          // Step 1: Create user account in Supabase Auth
+          const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+            email: team.leaderEmail,
+            password: password,
+            email_confirm: true,
+            user_metadata: {
+              team_name: team.teamName,
+              team_code: teamCode,
+              role: 'team_leader'
+            }
+          });
 
-        if (error) {
-          results.push({ team: team.teamName, success: false, error: error.message });
-        } else {
+          if (authError && !authError.message.includes('already registered')) {
+            throw authError;
+          }
+
+          // Step 2: Create team record
+          const { data: teamData, error: teamError } = await supabase
+            .from("teams")
+            .insert({
+              team_name: team.teamName,
+              team_code: teamCode,
+              leader_email: team.leaderEmail,
+              password_hash: passwordHash,
+              is_active: true,
+              is_disqualified: false,
+              current_round: 0,
+              total_score: 0,
+              round1_score: 0,
+              round2_score: 0,
+              round3_score: 0
+            })
+            .select()
+            .single();
+
+          if (teamError) throw teamError;
+
+          // Step 3: Add user role (if account was created)
+          if (authData?.user && !authError) {
+            const { error: roleError } = await supabase
+              .from("user_roles")
+              .insert({
+                user_id: authData.user.id,
+                role: 'user'
+              });
+
+            if (roleError) {
+              console.warn("Role assignment error:", roleError);
+            }
+          }
+
+          // Step 4: Send email with credentials
+          await sendTeamCredentials({
+            teamName: team.teamName,
+            teamCode: teamCode,
+            password: password,
+            leaderEmail: team.leaderEmail,
+            loginUrl: window.location.origin + '/login'
+          });
+
           results.push({ 
             team: team.teamName, 
             success: true, 
             teamCode, 
             password,
-            leaderEmail: team.leaderEmail
+            leaderEmail: team.leaderEmail,
+            message: "Account created and credentials sent"
+          });
+
+        } catch (error: any) {
+          results.push({ 
+            team: team.teamName, 
+            success: false, 
+            error: error.message,
+            message: "Failed to create account or send email"
           });
         }
       }
@@ -228,12 +323,11 @@ export const TeamRegistration = () => {
       const successful = results.filter(r => r.success).length;
       const failed = results.filter(r => !r.success).length;
 
-      toast.success(`Registered ${successful} teams successfully. ${failed} failed.`);
+      toast.success(`Successfully registered ${successful} teams with accounts created and emails sent. ${failed} failed.`);
       
-      // TODO: Send bulk emails with credentials
-      console.log("Registration results:", results);
-
+      console.log("Bulk registration results:", results);
       setBulkTeams([]);
+
     } catch (error) {
       console.error("Bulk registration error:", error);
       toast.error("Failed to register teams");
