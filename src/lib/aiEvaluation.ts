@@ -19,6 +19,7 @@ export interface EvaluationRequest {
 export interface EvaluationResponse {
   isCorrect: boolean;
   score: number;
+  points: number; // Actual points awarded based on round
   feedback: string;
   reasoning: string;
   constraintViolations: string[];
@@ -143,6 +144,7 @@ Respond with a JSON object only, no additional text.
       return {
         isCorrect: Boolean(parsed.isCorrect),
         score: Math.max(0, Math.min(100, Number(parsed.score) || 0)),
+        points: 0, // Will be calculated in evaluateSubmission
         feedback: String(parsed.feedback || 'No feedback provided'),
         reasoning: String(parsed.reasoning || 'No reasoning provided'),
         constraintViolations: Array.isArray(parsed.constraintViolations) 
@@ -159,6 +161,7 @@ Respond with a JSON object only, no additional text.
       return {
         isCorrect: false,
         score: 0,
+        points: 0,
         feedback: 'Failed to parse AI evaluation response',
         reasoning: 'AI response parsing error',
         constraintViolations: ['AI evaluation failed'],
@@ -270,6 +273,7 @@ Respond with JSON only, no additional text or formatting.
       return {
         isCorrect: Boolean(parsed.isCorrect),
         score: Math.max(0, Math.min(100, Number(parsed.score) || 0)),
+        points: 0, // Will be calculated in evaluateSubmission
         feedback: String(parsed.feedback || 'No feedback provided'),
         reasoning: String(parsed.reasoning || 'No reasoning provided'),
         constraintViolations: Array.isArray(parsed.constraintViolations) 
@@ -286,6 +290,7 @@ Respond with JSON only, no additional text or formatting.
       return {
         isCorrect: false,
         score: 0,
+        points: 0,
         feedback: 'Failed to parse AI evaluation response',
         reasoning: 'AI response parsing error',
         constraintViolations: ['AI evaluation failed'],
@@ -327,7 +332,8 @@ export class AIEvaluationService {
     teamId: string,
     questionId: string,
     roundNumber: number,
-    request: EvaluationRequest
+    request: EvaluationRequest,
+    questionWeightage?: number // For Round 2 variable scoring
   ): Promise<EvaluationResponse> {
     let lastError: Error | null = null;
     
@@ -345,6 +351,30 @@ export class AIEvaluationService {
           
           const result = await evaluator!.evaluateCode(request);
           
+          // Calculate points based on round
+          let points = 0;
+          switch (roundNumber) {
+            case 1:
+              // Round 1: 10 points per correct answer, no negative marking
+              points = result.isCorrect ? 10 : 0;
+              break;
+            case 2:
+              // Round 2: Variable points for correct, -10 for incorrect
+              points = result.isCorrect ? (questionWeightage || 0) : -10;
+              break;
+            case 3:
+              // Round 3: Points handled separately in Jeopardy system
+              points = result.score; // Use existing Jeopardy scoring
+              break;
+            default:
+              points = result.isCorrect ? result.score : 0;
+          }
+          
+          const finalResult = {
+            ...result,
+            points
+          };
+          
           // Log the evaluation
           await this.logEvaluation({
             team_id: teamId,
@@ -352,11 +382,11 @@ export class AIEvaluationService {
             round_number: roundNumber,
             user_code: request.userCode,
             ai_provider: provider,
-            ai_response: JSON.stringify(result),
-            evaluation_result: result
+            ai_response: JSON.stringify(finalResult),
+            evaluation_result: finalResult
           });
 
-          return result;
+          return finalResult;
 
         } catch (error) {
           lastError = error as Error;
@@ -373,6 +403,7 @@ export class AIEvaluationService {
     const fallbackResult: EvaluationResponse = {
       isCorrect: false,
       score: 0,
+      points: 0,
       feedback: 'AI evaluation service temporarily unavailable. Please try again later.',
       reasoning: `All AI evaluators failed. Last error: ${lastError?.message}`,
       constraintViolations: ['AI evaluation failed'],
@@ -398,16 +429,31 @@ export class AIEvaluationService {
 
   private async logEvaluation(log: AIEvaluationLog): Promise<void> {
     try {
+      // Get round ID for the log
+      const { data: roundData, error: roundError } = await supabase
+        .from("rounds")
+        .select("id")
+        .eq("round_number", log.round_number)
+        .single();
+
+      if (roundError) {
+        console.error('Failed to get round ID for AI evaluation log:', roundError);
+        return;
+      }
+
       const { error } = await supabase
         .from('ai_evaluation_log')
         .insert({
           team_id: log.team_id,
-          question_id: log.question_id,
-          round_number: log.round_number,
-          user_code: log.user_code,
+          question_id: log.question_id, // Now TEXT instead of UUID
+          round_id: roundData.id,
+          question_text: log.evaluation_result.feedback, // Store question text
+          team_answer: log.user_code,
           ai_provider: log.ai_provider,
+          ai_prompt: `Question: ${log.question_id}`, // Simplified prompt
           ai_response: log.ai_response,
-          evaluation_result: log.evaluation_result,
+          ai_score: log.evaluation_result.isCorrect ? 1 : 0,
+          evaluation_time_ms: null, // Could be added later if needed
           created_at: new Date().toISOString()
         });
 

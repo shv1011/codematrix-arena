@@ -4,10 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Leaderboard } from "@/components/leaderboard/Leaderboard";
-import { TeamRegistration } from "@/components/admin/TeamRegistration";
 import { TeamManagement } from "@/components/admin/TeamManagement";
 import { TeamAccessControl } from "@/components/admin/TeamAccessControl";
-import { EmailManagement } from "@/components/admin/EmailManagement";
 import { QuestionManager } from "@/components/admin/QuestionManager";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -18,14 +16,11 @@ import {
   Users, 
   Settings, 
   Trophy,
-  AlertTriangle,
   Ban,
   CheckCircle,
   Terminal,
   Zap,
-  UserPlus,
   Users as UsersIcon,
-  Mail,
   Shield,
   FileText
 } from "lucide-react";
@@ -103,67 +98,147 @@ export const AdminDashboard = () => {
   };
 
   const fetchGameState = async () => {
-    const { data, error } = await supabase
-      .from("game_state")
-      .select("*")
-      .single();
-    
-    if (!error && data) {
-      setGameState(data);
+    try {
+      const { data, error } = await supabase
+        .from("game_state")
+        .select("*")
+        .single();
+      
+      if (error) {
+        console.error("Error fetching game state:", error);
+        if (error.code === 'PGRST116') {
+          // No rows returned - create initial game state
+          console.log("No game state found, creating initial state...");
+          const { data: newGameState, error: insertError } = await supabase
+            .from("game_state")
+            .insert({ current_round: 0, is_competition_active: false })
+            .select()
+            .single();
+          
+          if (insertError) {
+            console.error("Error creating initial game state:", insertError);
+            toast.error("Failed to initialize game state");
+          } else {
+            setGameState(newGameState);
+            console.log("Initial game state created:", newGameState);
+          }
+        } else {
+          toast.error(`Failed to load game state: ${error.message}`);
+        }
+      } else if (data) {
+        setGameState(data);
+        console.log("Game state loaded:", data);
+      }
+    } catch (err) {
+      console.error("Exception fetching game state:", err);
+      toast.error("Failed to load game state");
     }
   };
 
   const fetchRounds = async () => {
-    const { data, error } = await supabase
-      .from("rounds")
-      .select("*")
-      .order("round_number");
-    
-    if (!error && data) {
-      setRounds(data);
+    try {
+      const { data, error } = await supabase
+        .from("rounds")
+        .select("*")
+        .order("round_number");
+      
+      if (error) {
+        console.error("Error fetching rounds:", error);
+        toast.error(`Failed to load rounds: ${error.message}`);
+      } else if (data) {
+        setRounds(data);
+        console.log("Rounds loaded:", data);
+      }
+    } catch (err) {
+      console.error("Exception fetching rounds:", err);
+      toast.error("Failed to load rounds");
     }
   };
 
   const toggleCompetition = async () => {
-    if (!gameState) return;
+    if (!gameState) {
+      toast.error("Game state not loaded. Please refresh the page.");
+      return;
+    }
     
-    const { error } = await supabase
-      .from("game_state")
-      .update({ is_competition_active: !gameState.is_competition_active })
-      .eq("id", gameState.id);
+    console.log("Toggling competition. Current state:", gameState);
     
-    if (error) {
-      toast.error("Failed to toggle competition");
-    } else {
-      toast.success(gameState.is_competition_active ? "Competition paused" : "Competition started!");
+    try {
+      const { error } = await supabase
+        .from("game_state")
+        .update({ is_competition_active: !gameState.is_competition_active })
+        .eq("id", gameState.id);
+      
+      if (error) {
+        console.error("Toggle competition error:", error);
+        toast.error(`Failed to toggle competition: ${error.message}`);
+      } else {
+        const newStatus = gameState.is_competition_active ? "Competition paused" : "Competition started!";
+        toast.success(newStatus);
+        console.log("Competition toggled successfully:", newStatus);
+        // Refresh game state
+        await fetchGameState();
+      }
+    } catch (err) {
+      console.error("Toggle competition exception:", err);
+      toast.error("An unexpected error occurred");
     }
   };
 
   const startRound = async (roundNumber: number) => {
-    if (!gameState) return;
+    if (!gameState) {
+      toast.error("Game state not loaded. Please refresh the page.");
+      return;
+    }
 
-    // Deactivate all rounds first
-    await supabase
-      .from("rounds")
-      .update({ is_active: false })
-      .neq("round_number", 0);
+    console.log(`Starting round ${roundNumber}. Current game state:`, gameState);
 
-    // Activate the selected round
-    const { error: roundError } = await supabase
-      .from("rounds")
-      .update({ is_active: true, start_time: new Date().toISOString() })
-      .eq("round_number", roundNumber);
+    try {
+      // Deactivate all rounds first
+      const { error: deactivateError } = await supabase
+        .from("rounds")
+        .update({ is_active: false })
+        .neq("round_number", 0);
 
-    // Update game state
-    const { error: gameError } = await supabase
-      .from("game_state")
-      .update({ current_round: roundNumber, is_competition_active: true })
-      .eq("id", gameState.id);
+      if (deactivateError) {
+        console.error("Error deactivating rounds:", deactivateError);
+        toast.error(`Failed to deactivate rounds: ${deactivateError.message}`);
+        return;
+      }
 
-    if (roundError || gameError) {
-      toast.error("Failed to start round");
-    } else {
+      // Activate the selected round
+      const { error: roundError } = await supabase
+        .from("rounds")
+        .update({ is_active: true, start_time: new Date().toISOString() })
+        .eq("round_number", roundNumber);
+
+      if (roundError) {
+        console.error("Error activating round:", roundError);
+        toast.error(`Failed to activate round: ${roundError.message}`);
+        return;
+      }
+
+      // Update game state
+      const { error: gameError } = await supabase
+        .from("game_state")
+        .update({ current_round: roundNumber, is_competition_active: true })
+        .eq("id", gameState.id);
+
+      if (gameError) {
+        console.error("Error updating game state:", gameError);
+        toast.error(`Failed to update game state: ${gameError.message}`);
+        return;
+      }
+
       toast.success(`Round ${roundNumber} started!`);
+      console.log(`Round ${roundNumber} started successfully`);
+      
+      // Refresh data
+      await Promise.all([fetchGameState(), fetchRounds()]);
+      
+    } catch (err) {
+      console.error("Start round exception:", err);
+      toast.error("An unexpected error occurred while starting the round");
     }
   };
 
@@ -249,7 +324,7 @@ export const AdminDashboard = () => {
 
       {/* Main Content Tabs */}
       <Tabs defaultValue="control" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-7">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="control" className="flex items-center gap-2">
             <Settings className="w-4 h-4" />
             Control
@@ -258,10 +333,6 @@ export const AdminDashboard = () => {
             <FileText className="w-4 h-4" />
             Questions
           </TabsTrigger>
-          <TabsTrigger value="register" className="flex items-center gap-2">
-            <UserPlus className="w-4 h-4" />
-            Register Teams
-          </TabsTrigger>
           <TabsTrigger value="manage" className="flex items-center gap-2">
             <UsersIcon className="w-4 h-4" />
             Manage Teams
@@ -269,10 +340,6 @@ export const AdminDashboard = () => {
           <TabsTrigger value="access" className="flex items-center gap-2">
             <Shield className="w-4 h-4" />
             Access Control
-          </TabsTrigger>
-          <TabsTrigger value="emails" className="flex items-center gap-2">
-            <Mail className="w-4 h-4" />
-            Emails
           </TabsTrigger>
           <TabsTrigger value="leaderboard" className="flex items-center gap-2">
             <Trophy className="w-4 h-4" />
@@ -309,6 +376,21 @@ export const AdminDashboard = () => {
                       Start Competition
                     </>
                   )}
+                </Button>
+
+                {/* Debug button - remove in production */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    console.log("=== DEBUG INFO ===");
+                    console.log("gameState:", gameState);
+                    console.log("rounds:", rounds);
+                    console.log("teams:", teams);
+                    toast.info("Debug info logged to console");
+                  }}
+                >
+                  Debug
                 </Button>
 
                 {rounds.map((round) => (
@@ -381,11 +463,6 @@ export const AdminDashboard = () => {
           <QuestionManager />
         </TabsContent>
 
-        {/* Team Registration Tab */}
-        <TabsContent value="register">
-          <TeamRegistration />
-        </TabsContent>
-
         {/* Team Management Tab */}
         <TabsContent value="manage">
           <TeamManagement />
@@ -394,11 +471,6 @@ export const AdminDashboard = () => {
         {/* Team Access Control Tab */}
         <TabsContent value="access">
           <TeamAccessControl />
-        </TabsContent>
-
-        {/* Email Management Tab */}
-        <TabsContent value="emails">
-          <EmailManagement />
         </TabsContent>
 
         {/* Leaderboard Tab */}

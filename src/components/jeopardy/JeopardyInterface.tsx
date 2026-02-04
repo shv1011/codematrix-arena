@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/components/auth/AuthContext";
 import { QuestionLoader, Round3Data } from "@/lib/questionLoader";
 import { aiEvaluationService, EvaluationRequest } from "@/lib/aiEvaluation";
+import { cumulativeScoring } from "@/lib/cumulativeScoring";
 import { JeopardyFCFS, FCFSSelection } from "@/lib/jeopardyFCFS";
 import { JeopardyGrid } from "./JeopardyGrid";
 import { CodeEditor } from "../constraint/CodeEditor";
@@ -158,11 +159,24 @@ export const JeopardyInterface = () => {
     const initializeJeopardy = async () => {
       setIsLoading(true);
       await Promise.all([fetchTeam(), fetchQuestions(), fetchGameState()]);
+      
+      // Initialize Round 3 with cumulative scores + 500 bonus
+      if (team) {
+        await cumulativeScoring.initializeRound3Score(team.id);
+        const teamScores = await cumulativeScoring.getTeamScores(team.id);
+        if (teamScores) {
+          setJeopardyState(prev => ({
+            ...prev,
+            totalScore: teamScores.jeopardyStartingScore
+          }));
+        }
+      }
+      
       setIsLoading(false);
     };
 
     initializeJeopardy();
-  }, [fetchTeam, fetchQuestions, fetchGameState]);
+  }, [fetchTeam, fetchQuestions, fetchGameState, team?.id]);
 
   // Fetch locks when team is available
   useEffect(() => {
@@ -295,10 +309,10 @@ export const JeopardyInterface = () => {
         evaluationRequest
       );
 
-      // Calculate points based on AI evaluation and reward system
+      // Jeopardy negative marking: Deduct base points if incorrect, reward points if correct
       const basePoints = question.points;
       const rewardPoints = question.reward;
-      const pointsEarned = result.isCorrect ? rewardPoints : Math.floor(basePoints * (result.score / 100));
+      const pointsEarned = result.isCorrect ? rewardPoints : -basePoints;
 
       // Submit answer and release lock
       const submitSuccess = await JeopardyFCFS.submitAnswer(
@@ -306,12 +320,16 @@ export const JeopardyInterface = () => {
         team.id,
         submission.code,
         result.isCorrect,
-        pointsEarned
+        pointsEarned,
+        basePoints // Pass base points for negative marking logic
       );
 
       if (!submitSuccess) {
         throw new Error("Failed to submit answer");
       }
+
+      // Update team score using cumulative scoring system
+      await cumulativeScoring.updateRoundScore(team.id, 3, pointsEarned);
 
       // Update local state
       setJeopardyState(prev => ({
@@ -329,19 +347,35 @@ export const JeopardyInterface = () => {
         selectedQuestion: null
       }));
 
-      // Update questions to mark as answered
-      setJeopardyState(prev => ({
-        ...prev,
-        questions: prev.questions.map(q => 
-          q.id === question.id 
-            ? { ...q, answered_by: team.team_name, is_locked: false }
-            : q
-        )
-      }));
+      // Update questions to mark as answered only if correct
+      if (result.isCorrect) {
+        setJeopardyState(prev => ({
+          ...prev,
+          questions: prev.questions.map(q => 
+            q.id === question.id 
+              ? { ...q, answered_by: team.team_name, is_locked: false }
+              : q
+          )
+        }));
+      } else {
+        // If incorrect, question remains available for other teams
+        setJeopardyState(prev => ({
+          ...prev,
+          questions: prev.questions.map(q => 
+            q.id === question.id 
+              ? { ...q, is_locked: false } // Just unlock, don't mark as answered
+              : q
+          )
+        }));
+      }
 
       setIsQuestionDialogOpen(false);
       
-      toast.success(`Answer submitted! Score: ${result.score}/100 (${pointsEarned} points)`);
+      toast.success(
+        result.isCorrect 
+          ? `Correct! +${pointsEarned} points` 
+          : `Incorrect! ${pointsEarned} points deducted. Question remains available for others.`
+      );
       
       // Refresh locks and questions
       fetchLocks();
@@ -420,86 +454,57 @@ export const JeopardyInterface = () => {
     : { code: '', language: selectedLanguage };
 
   return (
-    <div className="min-h-screen bg-background p-4">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <Card variant="glass" className="mb-6">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h1 className="text-2xl font-bold flex items-center gap-2">
-                  <Trophy className="w-6 h-6 text-primary" />
-                  {jeopardyState.roundData?.round_info.round_name || "Code Jeopardy"} - Round 3
-                </h1>
-                <p className="text-muted-foreground">Team: {team.team_name}</p>
-                {jeopardyState.roundData && (
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {jeopardyState.roundData.round_info.description}
-                  </p>
-                )}
-              </div>
-              <div className="text-right">
-                <div className={`text-2xl font-mono font-bold ${
-                  jeopardyState.timeRemaining < 600 ? 'text-destructive' : 'text-primary'
-                }`}>
-                  <Clock className="w-5 h-5 inline mr-2" />
-                  {formatTime(jeopardyState.timeRemaining)}
-                </div>
-                <p className="text-sm text-muted-foreground">Time Remaining</p>
-              </div>
-            </div>
-            
+    <div className="h-screen bg-background flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col p-4 max-w-7xl mx-auto w-full">
+        {/* Compact Header */}
+        <Card variant="glass" className="mb-4 flex-shrink-0">
+          <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
+                <div>
+                  <h1 className="text-xl lg:text-2xl font-bold flex items-center gap-2">
+                    <Trophy className="w-5 h-5 lg:w-6 lg:h-6 text-primary" />
+                    {jeopardyState.roundData?.round_info.round_name || "Code Jeopardy"} - Round 3
+                  </h1>
+                  <p className="text-sm text-muted-foreground">Team: {team.team_name}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className={`text-lg lg:text-xl font-mono font-bold ${
+                  jeopardyState.timeRemaining < 600 ? 'text-destructive' : 'text-primary'
+                }`}>
+                  <Clock className="w-4 h-4 lg:w-5 lg:h-5 inline mr-2" />
+                  {formatTime(jeopardyState.timeRemaining)}
+                </div>
                 <Badge variant="outline" className="flex items-center gap-1">
                   <Star className="w-3 h-3" />
                   {jeopardyState.totalScore} Points
-                </Badge>
-                <Badge variant="secondary" className="flex items-center gap-1">
-                  <Lock className="w-3 h-3" />
-                  {jeopardyState.teamLocks.length} Locked
-                </Badge>
-                <Badge variant="outline" className="flex items-center gap-1">
-                  <Users className="w-3 h-3" />
-                  {jeopardyState.activeLocks.length} Active Locks
                 </Badge>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Active Locks Display */}
+        {/* Active Locks Display - Compact */}
         {jeopardyState.teamLocks.length > 0 && (
-          <Card variant="neon" className="mb-6">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Lock className="w-5 h-5" />
-                Your Active Locks
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <Card variant="neon" className="mb-4 flex-shrink-0">
+            <CardContent className="p-3">
+              <div className="flex items-center gap-2 text-sm">
+                <Lock className="w-4 h-4" />
+                <span className="font-semibold">Your Locks:</span>
                 {jeopardyState.teamLocks.map((lock) => (
-                  <div key={lock.questionId} className="p-3 border rounded-lg bg-primary/5">
-                    <div className="flex items-center justify-between mb-2">
-                      <Badge variant="outline">Question {lock.questionId}</Badge>
-                      <Badge variant="destructive">
-                        {Math.ceil(lock.timeRemaining / 60)}m left
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      Locked at {lock.lockedAt.toLocaleTimeString()}
-                    </p>
-                  </div>
+                  <Badge key={lock.questionId} variant="destructive" className="text-xs">
+                    Q{lock.questionId} ({Math.ceil(lock.timeRemaining / 60)}m)
+                  </Badge>
                 ))}
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* Jeopardy Grid */}
-        <Card variant="glass" className="mb-6">
-          <CardContent className="p-6">
+        {/* Jeopardy Grid - Takes remaining space */}
+        <Card variant="glass" className="flex-1 flex flex-col min-h-0">
+          <CardContent className="p-4 flex-1 flex flex-col">
             <JeopardyGrid
               questions={jeopardyState.questions}
               onSelectQuestion={handleQuestionSelect}
@@ -513,7 +518,7 @@ export const JeopardyInterface = () => {
 
         {/* Question Dialog */}
         <Dialog open={isQuestionDialogOpen} onOpenChange={setIsQuestionDialogOpen}>
-          <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Zap className="w-5 h-5" />
@@ -522,11 +527,11 @@ export const JeopardyInterface = () => {
             </DialogHeader>
             
             {jeopardyState.selectedQuestion && (
-              <div className="space-y-6">
+              <div className="space-y-4">
                 {/* Question Details */}
                 <Card variant="neon">
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between mb-4">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
                         <Badge variant="outline">{jeopardyState.selectedQuestion.difficulty}</Badge>
                         <Badge variant="outline">{jeopardyState.selectedQuestion.points} pts</Badge>
@@ -534,19 +539,19 @@ export const JeopardyInterface = () => {
                       </div>
                     </div>
                     
-                    <p className="text-lg mb-4">{jeopardyState.selectedQuestion.question}</p>
+                    <p className="text-base mb-3">{jeopardyState.selectedQuestion.question}</p>
                     
                     {/* Sample Input/Output */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
-                        <h4 className="font-semibold mb-2">Sample Input:</h4>
-                        <pre className="p-3 bg-muted rounded-lg text-sm font-mono">
+                        <h4 className="font-semibold mb-2 text-sm">Sample Input:</h4>
+                        <pre className="p-2 bg-muted rounded text-xs font-mono">
                           {jeopardyState.selectedQuestion.sample_input}
                         </pre>
                       </div>
                       <div>
-                        <h4 className="font-semibold mb-2">Sample Output:</h4>
-                        <pre className="p-3 bg-muted rounded-lg text-sm font-mono">
+                        <h4 className="font-semibold mb-2 text-sm">Sample Output:</h4>
+                        <pre className="p-2 bg-muted rounded text-xs font-mono">
                           {jeopardyState.selectedQuestion.sample_output}
                         </pre>
                       </div>
@@ -564,7 +569,7 @@ export const JeopardyInterface = () => {
                   isSubmitting={currentSubmission.isEvaluating}
                   isSubmitted={!!currentSubmission.submittedAt}
                   result={currentSubmission.result}
-                  height="400px"
+                  height="300px"
                 />
               </div>
             )}

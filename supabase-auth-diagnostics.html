@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supabase Auth Diagnostics</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            font-family: monospace;
+            max-width: 1000px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #0d1117;
+            color: #c9d1d9;
+        }
+        .container {
+            background: #161b22;
+            padding: 30px;
+            border-radius: 8px;
+            border: 1px solid #30363d;
+        }
+        h1 { color: #58a6ff; text-align: center; }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            background: #21262d;
+            border-radius: 6px;
+            border-left: 4px solid #58a6ff;
+        }
+        .test-section h3 {
+            color: #58a6ff;
+            margin-top: 0;
+        }
+        .result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        .success {
+            background: #0d4429;
+            border: 1px solid #238636;
+            color: #3fb950;
+        }
+        .error {
+            background: #490202;
+            border: 1px solid #f85149;
+            color: #f85149;
+        }
+        .warning {
+            background: #332b00;
+            border: 1px solid #d29922;
+            color: #f2cc60;
+        }
+        .info {
+            background: #0c2d6b;
+            border: 1px solid #1f6feb;
+            color: #79c0ff;
+        }
+        button {
+            background: #238636;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        button:hover {
+            background: #2ea043;
+        }
+        .danger-btn {
+            background: #da3633;
+        }
+        .danger-btn:hover {
+            background: #f85149;
+        }
+        input {
+            background: #0d1117;
+            color: #c9d1d9;
+            border: 1px solid #30363d;
+            padding: 8px;
+            margin: 5px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        .code-block {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            font-size: 12px;
+            overflow-x: auto;
+        }
+        .fix-section {
+            background: #1a1f36;
+            border: 1px solid #3d4663;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 6px;
+        }
+        .fix-section h4 {
+            color: #ffa657;
+            margin-top: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Supabase Auth Diagnostics</h1>
+        
+        <div class="test-section">
+            <h3>1. Environment Check</h3>
+            <button onclick="checkEnvironment()">Check Config</button>
+            <div id="envResult"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>2. Supabase Connection Test</h3>
+            <button onclick="testSupabaseConnection()">Test Connection</button>
+            <div id="connectionResult"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>3. Auth Endpoint Test</h3>
+            <button onclick="testAuthEndpoint()">Test Auth API</button>
+            <div id="authResult"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>4. Database Access Test</h3>
+            <button onclick="testDatabaseAccess()">Test Database</button>
+            <div id="dbResult"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>5. Manual Login Test</h3>
+            <input type="email" id="testEmail" placeholder="admin@codewars.com" value="admin@codewars.com">
+            <input type="password" id="testPassword" placeholder="admin123!" value="admin123!">
+            <button onclick="testManualLogin()">Test Login</button>
+            <div id="loginResult"></div>
+        </div>
+
+        <div class="fix-section">
+            <h4>🛠️ Common Fixes</h4>
+            <button onclick="showCommonFixes()">Show Fixes</button>
+            <div id="fixesResult"></div>
+        </div>
+
+        <div class="fix-section">
+            <h4>🚨 Emergency Reset</h4>
+            <button class="danger-btn" onclick="showEmergencyReset()">Show Reset Options</button>
+            <div id="resetResult"></div>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = "https://wscdzjtwaxunorfmpuzl.supabase.co";
+        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndzY2R6anR3YXh1bm9yZm1wdXpsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk2NTU1NDQsImV4cCI6MjA4NTIzMTU0NH0.0zDOMWXle1bwyM5LJpgh3PdEQq1n7E-mmL8adMZiWlc";
+
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        
+        function log(message, type = 'info', containerId) {
+            const container = document.getElementById(containerId);
+            const div = document.createElement('div');
+            div.className = `result ${type}`;
+            div.innerHTML = `<strong>[${new Date().toLocaleTimeString()}]</strong> ${message}`;
+            container.appendChild(div);
+        }
+
+        function checkEnvironment() {
+            const container = document.getElementById('envResult');
+            container.innerHTML = '';
+            
+            log('🔍 Checking environment configuration...', 'info', 'envResult');
+            
+            // Check URL format
+            if (SUPABASE_URL && SUPABASE_URL.includes('supabase.co')) {
+                log(`✅ Supabase URL looks valid: ${SUPABASE_URL}`, 'success', 'envResult');
+            } else {
+                log(`❌ Invalid Supabase URL: ${SUPABASE_URL}`, 'error', 'envResult');
+            }
+            
+            // Check key format
+            if (SUPABASE_KEY && SUPABASE_KEY.startsWith('eyJ')) {
+                log('✅ Supabase key format looks valid', 'success', 'envResult');
+            } else {
+                log('❌ Invalid Supabase key format', 'error', 'envResult');
+            }
+            
+            // Check key expiry
+            try {
+                const payload = JSON.parse(atob(SUPABASE_KEY.split('.')[1]));
+                const expiry = new Date(payload.exp * 1000);
+                const now = new Date();
+                
+                if (expiry > now) {
+                    log(`✅ Key expires: ${expiry.toLocaleString()}`, 'success', 'envResult');
+                } else {
+                    log(`❌ Key expired: ${expiry.toLocaleString()}`, 'error', 'envResult');
+                }
+            } catch (e) {
+                log('⚠️ Could not parse key expiry', 'warning', 'envResult');
+            }
+        }
+
+        async function testSupabaseConnection() {
+            const container = document.getElementById('connectionResult');
+            container.innerHTML = '';
+            
+            log('🔍 Testing Supabase connection...', 'info', 'connectionResult');
+            
+            try {
+                // Test basic REST endpoint
+                const response = await fetch(`${SUPABASE_URL}/rest/v1/`, {
+                    headers: {
+                        'apikey': SUPABASE_KEY,
+                        'Authorization': `Bearer ${SUPABASE_KEY}`
+                    }
+                });
+                
+                log(`REST API Status: ${response.status}`, response.ok ? 'success' : 'error', 'connectionResult');
+                
+                if (response.ok) {
+                    log('✅ Basic Supabase connection working', 'success', 'connectionResult');
+                } else {
+                    log(`❌ REST API failed: ${response.statusText}`, 'error', 'connectionResult');
+                }
+                
+            } catch (error) {
+                log(`❌ Connection failed: ${error.message}`, 'error', 'connectionResult');
+            }
+        }
+
+        async function testAuthEndpoint() {
+            const container = document.getElementById('authResult');
+            container.innerHTML = '';
+            
+            log('🔍 Testing auth endpoints...', 'info', 'authResult');
+            
+            try {
+                // Test auth settings endpoint
+                const settingsResponse = await fetch(`${SUPABASE_URL}/auth/v1/settings`, {
+                    headers: {
+                        'apikey': SUPABASE_KEY,
+                        'Authorization': `Bearer ${SUPABASE_KEY}`
+                    }
+                });
+                
+                log(`Auth settings: ${settingsResponse.status}`, settingsResponse.ok ? 'success' : 'error', 'authResult');
+                
+                if (settingsResponse.ok) {
+                    const settings = await settingsResponse.json();
+                    log('✅ Auth endpoint accessible', 'success', 'authResult');
+                    log(`External URL: ${settings.external_url || 'Not set'}`, 'info', 'authResult');
+                    log(`Disable signup: ${settings.disable_signup || false}`, 'info', 'authResult');
+                } else {
+                    log(`❌ Auth settings failed: ${settingsResponse.statusText}`, 'error', 'authResult');
+                }
+                
+                // Test token endpoint directly
+                const tokenResponse = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+                    method: 'POST',
+                    headers: {
+                        'apikey': SUPABASE_KEY,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        email: 'test@example.com',
+                        password: 'testpassword'
+                    })
+                });
+                
+                log(`Token endpoint: ${tokenResponse.status}`, 'info', 'authResult');
+                
+                if (tokenResponse.status === 400) {
+                    const errorData = await tokenResponse.json();
+                    log(`Token error: ${errorData.error_description || errorData.msg}`, 'warning', 'authResult');
+                } else if (tokenResponse.status === 422) {
+                    log('✅ Token endpoint working (invalid credentials expected)', 'success', 'authResult');
+                }
+                
+            } catch (error) {
+                log(`❌ Auth test failed: ${error.message}`, 'error', 'authResult');
+            }
+        }
+
+        async function testDatabaseAccess() {
+            const container = document.getElementById('dbResult');
+            container.innerHTML = '';
+            
+            log('🔍 Testing database access...', 'info', 'dbResult');
+            
+            try {
+                // Test teams table access
+                const { data: teamsData, error: teamsError } = await supabase
+                    .from('teams')
+                    .select('count')
+                    .limit(1);
+                
+                if (teamsError) {
+                    log(`❌ Teams table error: ${teamsError.message}`, 'error', 'dbResult');
+                } else {
+                    log('✅ Teams table accessible', 'success', 'dbResult');
+                }
+                
+                // Test user_roles table access
+                const { data: rolesData, error: rolesError } = await supabase
+                    .from('user_roles')
+                    .select('count')
+                    .limit(1);
+                
+                if (rolesError) {
+                    log(`❌ User roles table error: ${rolesError.message}`, 'error', 'dbResult');
+                } else {
+                    log('✅ User roles table accessible', 'success', 'dbResult');
+                }
+                
+            } catch (error) {
+                log(`❌ Database test failed: ${error.message}`, 'error', 'dbResult');
+            }
+        }
+
+        async function testManualLogin() {
+            const email = document.getElementById('testEmail').value;
+            const password = document.getElementById('testPassword').value;
+            const container = document.getElementById('loginResult');
+            container.innerHTML = '';
+            
+            log(`🔍 Testing login: ${email}`, 'info', 'loginResult');
+            
+            try {
+                const { data, error } = await supabase.auth.signInWithPassword({
+                    email: email,
+                    password: password
+                });
+                
+                if (error) {
+                    log(`❌ Login failed: ${error.message}`, 'error', 'loginResult');
+                    log(`Error code: ${error.status || 'unknown'}`, 'error', 'loginResult');
+                    
+                    if (error.message.includes('Invalid login credentials')) {
+                        log('💡 User might not exist in auth.users table', 'warning', 'loginResult');
+                    }
+                    if (error.message.includes('Email not confirmed')) {
+                        log('💡 User exists but email not confirmed', 'warning', 'loginResult');
+                    }
+                } else {
+                    log('✅ Login successful!', 'success', 'loginResult');
+                    log(`User ID: ${data.user.id}`, 'success', 'loginResult');
+                    
+                    // Sign out immediately
+                    await supabase.auth.signOut();
+                    log('🔓 Signed out', 'info', 'loginResult');
+                }
+                
+            } catch (error) {
+                log(`❌ Login test failed: ${error.message}`, 'error', 'loginResult');
+            }
+        }
+
+        function showCommonFixes() {
+            const container = document.getElementById('fixesResult');
+            
+            const fixes = `
+<div class="code-block">🛠️ Common Fixes for 400 Bad Request:
+
+1. PROJECT PAUSED/INACTIVE:
+   - Go to Supabase Dashboard
+   - Check if project is paused due to inactivity
+   - Click "Resume" if paused
+
+2. BILLING ISSUES:
+   - Check Supabase Dashboard → Settings → Billing
+   - Ensure no payment issues
+   - Check usage limits
+
+3. AUTH SETTINGS:
+   - Go to Authentication → Settings
+   - Ensure "Enable email confirmations" is configured
+   - Check Site URL is set correctly
+   - Verify redirect URLs
+
+4. INVALID CREDENTIALS:
+   - Double-check SUPABASE_URL and SUPABASE_KEY
+   - Regenerate API keys if needed
+   - Ensure using anon/public key, not service role
+
+5. CORS ISSUES:
+   - Check if running on correct domain
+   - Verify Site URL in Supabase settings
+   - Add localhost:8080 to allowed origins
+
+6. DATABASE ISSUES:
+   - Check if auth.users table exists
+   - Verify RLS policies are not blocking
+   - Check database connection</div>`;
+            
+            container.innerHTML = fixes;
+        }
+
+        function showEmergencyReset() {
+            const container = document.getElementById('resetResult');
+            
+            const reset = `
+<div class="code-block">🚨 Emergency Reset Options:
+
+1. RESET SUPABASE PROJECT:
+   - Go to Supabase Dashboard
+   - Settings → General → Reset Database Password
+   - Or create new project if needed
+
+2. REGENERATE API KEYS:
+   - Settings → API
+   - Regenerate anon/public key
+   - Update .env file with new key
+
+3. RESET AUTH SETTINGS:
+   - Authentication → Settings
+   - Reset to default settings
+   - Re-enable email auth
+
+4. CREATE NEW TEST PROJECT:
+   - Create fresh Supabase project
+   - Run migration SQL again
+   - Update environment variables
+
+5. CHECK PROJECT STATUS:
+   - Ensure project is not paused
+   - Check billing status
+   - Verify region availability
+
+SQL to check auth.users table:
+SELECT table_name, column_name, data_type 
+FROM information_schema.columns 
+WHERE table_schema = 'auth' AND table_name = 'users'
+ORDER BY ordinal_position;</div>`;
+            
+            container.innerHTML = reset;
+        }
+
+        // Auto-run diagnostics on load
+        window.addEventListener('load', () => {
+            checkEnvironment();
+            setTimeout(testSupabaseConnection, 1000);
+        });
+    </script>
+</body>
+</html>

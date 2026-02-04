@@ -293,13 +293,14 @@ export class JeopardyFCFS {
     }
   }
 
-  // Submit answer and release lock
+  // Submit answer and handle negative marking for Jeopardy
   static async submitAnswer(
     questionId: string,
     teamId: string,
     answer: string,
     isCorrect: boolean,
-    pointsEarned: number
+    pointsEarned: number,
+    questionPoints: number // Base points for the question (for negative marking)
   ): Promise<boolean> {
     try {
       // Start transaction-like operations
@@ -319,36 +320,41 @@ export class JeopardyFCFS {
 
       if (submissionError) throw submissionError;
 
-      // 2. Update question status
-      const { error: questionError } = await supabase
-        .from("questions")
-        .update({
-          answered_by: teamId,
-          answered_at: new Date().toISOString()
-        })
-        .eq("id", questionId);
-
-      if (questionError) throw questionError;
-
-      // 3. Release the lock
-      const { error: lockError } = await supabase
-        .from("question_locks")
-        .update({ is_active: false })
-        .eq("question_id", questionId)
-        .eq("team_id", teamId)
-        .eq("is_active", true);
-
-      if (lockError) throw lockError;
-
-      // 4. Update team score if correct
       if (isCorrect) {
-        const { error: scoreError } = await supabase.rpc('increment_team_score', {
-          team_id: teamId,
-          points: pointsEarned,
-          round_num: 3
-        });
+        // 2a. If correct: Mark question as answered and release lock
+        const { error: questionError } = await supabase
+          .from("questions")
+          .update({
+            answered_by: teamId,
+            answered_at: new Date().toISOString()
+          })
+          .eq("id", questionId);
 
-        if (scoreError) throw scoreError;
+        if (questionError) throw questionError;
+
+        // Release the lock permanently
+        const { error: lockError } = await supabase
+          .from("question_locks")
+          .update({ is_active: false })
+          .eq("question_id", questionId)
+          .eq("team_id", teamId)
+          .eq("is_active", true);
+
+        if (lockError) throw lockError;
+
+      } else {
+        // 2b. If incorrect: Just release lock, keep question available for others
+        const { error: lockError } = await supabase
+          .from("question_locks")
+          .update({ is_active: false })
+          .eq("question_id", questionId)
+          .eq("team_id", teamId)
+          .eq("is_active", true);
+
+        if (lockError) throw lockError;
+
+        // Question remains available for other teams
+        console.log(`Question ${questionId} remains available after incorrect answer by team ${teamId}`);
       }
 
       return true;

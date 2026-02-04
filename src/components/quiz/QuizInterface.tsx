@@ -8,6 +8,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/components/auth/AuthContext";
 import { QuestionLoader, Round1Question, Round1Data } from "@/lib/questionLoader";
+import { aiEvaluationService, EvaluationRequest } from "@/lib/aiEvaluation";
+import { cumulativeScoring } from "@/lib/cumulativeScoring";
+import { performanceMonitor } from "@/lib/performance";
+import { validateSubmissionForm, submissionRateLimiter } from "@/lib/validation";
 import { toast } from "sonner";
 import { 
   Clock, 
@@ -19,7 +23,9 @@ import {
   ArrowLeft,
   Flag,
   Timer,
-  Brain
+  Brain,
+  Loader2,
+  Shield
 } from "lucide-react";
 
 interface QuizState {
@@ -28,6 +34,7 @@ interface QuizState {
   answers: Record<number, number>; // question id -> selected option index
   timeRemaining: number;
   isSubmitted: boolean;
+  isEvaluating: boolean;
   score: number;
   roundData: Round1Data | null;
 }
@@ -47,6 +54,7 @@ export const QuizInterface = () => {
     answers: {},
     timeRemaining: 1800, // 30 minutes - will be updated from JSON
     isSubmitted: false,
+    isEvaluating: false,
     score: 0,
     roundData: null
   });
@@ -75,10 +83,15 @@ export const QuizInterface = () => {
     }
   }, [user?.email]);
 
-  // Fetch quiz questions from JSON
+  // Fetch quiz questions from JSON with shuffling and random selection
   const fetchQuestions = useCallback(async () => {
     try {
-      const roundData = await QuestionLoader.loadRound1Questions();
+      const roundData = await QuestionLoader.loadRound1Questions({
+        shuffle: true, // Enable question shuffling
+        teamId: team?.id, // Use team ID for consistent shuffling
+        shuffleOptions: true, // Also shuffle answer options
+        selectCount: 45 // Randomly select 45 questions out of 61
+      });
       
       setQuizState(prev => ({
         ...prev,
@@ -90,7 +103,7 @@ export const QuizInterface = () => {
       console.error("Error fetching questions:", error);
       toast.error("Failed to load quiz questions");
     }
-  }, []);
+  }, [team?.id]);
 
   // Fetch game state
   const fetchGameState = useCallback(async () => {
@@ -166,60 +179,135 @@ export const QuizInterface = () => {
   const submitQuiz = async () => {
     if (!team) return;
 
+    // Rate limiting check
+    if (!submissionRateLimiter.isAllowed(team.id)) {
+      toast.error("Too many submissions. Please wait before submitting again.");
+      return;
+    }
+
+    setQuizState(prev => ({ ...prev, isEvaluating: true }));
+
     try {
+      // Performance monitoring
+      const submitStartTime = performance.now();
+      
       let totalScore = 0;
       const submissions = [];
 
-      // Calculate score and prepare submissions
+      // Get round ID first
+      const { data: roundData, error: roundError } = await supabase
+        .from("rounds")
+        .select("id")
+        .eq("round_number", 1)
+        .single();
+
+      if (roundError) throw roundError;
+
+      // Evaluate each question with AI
       for (const question of quizState.questions) {
         const userAnswerIndex = quizState.answers[question.id];
-        const isCorrect = userAnswerIndex === question.correct_answer;
+        const userAnswer = userAnswerIndex !== undefined ? question.options[userAnswerIndex] : "";
         
-        const pointsEarned = isCorrect ? question.points : 0;
+        // Validate submission data
+        const validationResult = validateSubmissionForm({
+          teamId: team.id,
+          questionId: question.id.toString(),
+          code: userAnswer,
+          language: 'text', // MCQ doesn't have language
+          roundNumber: 1
+        });
+
+        if (!validationResult.isValid) {
+          console.warn('Validation failed for question:', question.id, validationResult.errors);
+          continue;
+        }
+        
+        // Prepare AI evaluation request
+        const evaluationRequest: EvaluationRequest = {
+          question: question.question,
+          constraints: [], // No constraints for MCQ
+          userCode: userAnswer, // User's selected answer
+          testCases: [{
+            input: question.question,
+            expected_output: question.options[question.correct_answer]
+          }],
+          evaluationCriteria: `Multiple choice question. Correct answer is: "${question.options[question.correct_answer]}". User selected: "${userAnswer}"`
+        };
+
+        // Get AI evaluation with performance monitoring
+        const aiResult = await performanceMonitor.timeFunction(
+          'ai_evaluation',
+          () => aiEvaluationService.evaluateSubmission(
+            team.id,
+            question.id.toString(),
+            1, // Round 1
+            evaluationRequest
+          ),
+          { questionId: question.id, round: 1 }
+        );
+
+        // Round 1: 10 points per correct answer
+        const pointsEarned = aiResult.isCorrect ? 10 : 0;
         totalScore += pointsEarned;
 
         submissions.push({
           team_id: team.id,
           question_id: question.id.toString(),
-          round_number: 1,
-          answer: userAnswerIndex !== undefined ? question.options[userAnswerIndex] : "",
-          is_correct: isCorrect,
+          round_id: roundData.id,
+          question_text: question.question,
+          answer: userAnswer,
+          is_correct: aiResult.isCorrect,
           points_earned: pointsEarned,
+          ai_feedback: aiResult.feedback,
+          ai_evaluation: aiResult,
           submitted_at: new Date().toISOString()
         });
       }
 
-      // Submit all answers to submissions table
-      const { error: submissionError } = await supabase
-        .from("submissions")
-        .insert(submissions);
+      // Submit all answers to submissions table with performance monitoring
+      await performanceMonitor.timeFunction(
+        'database_query',
+        async () => {
+          const { error: submissionError } = await supabase
+            .from("submissions")
+            .insert(submissions);
 
-      if (submissionError) throw submissionError;
+          if (submissionError) throw submissionError;
+        },
+        { operation: 'insert_submissions', count: submissions.length }
+      );
 
-      // Update team score
-      const { error: scoreError } = await supabase
-        .from("teams")
-        .update({
-          round1_score: totalScore,
-          total_score: totalScore,
-          round1_completed_at: new Date().toISOString()
-        })
-        .eq("id", team.id);
-
-      if (scoreError) throw scoreError;
+      // Update team score using cumulative scoring system
+      await cumulativeScoring.updateRoundScore(team.id, 1, totalScore);
 
       setQuizState(prev => ({
         ...prev,
         isSubmitted: true,
+        isEvaluating: false,
         score: totalScore
       }));
 
-      toast.success(`Quiz submitted! Your score: ${totalScore} points`);
+      // Record performance metrics
+      const submitDuration = performance.now() - submitStartTime;
+      performanceMonitor.recordMetric('quiz_submission', submitDuration, {
+        teamId: team.id,
+        questionCount: quizState.questions.length,
+        score: totalScore
+      });
+
+      toast.success(`Quiz submitted! Score: ${totalScore} points`);
       setIsSubmitDialogOpen(false);
 
     } catch (error) {
       console.error("Error submitting quiz:", error);
       toast.error("Failed to submit quiz");
+      setQuizState(prev => ({ ...prev, isEvaluating: false }));
+      
+      // Record error metric
+      performanceMonitor.recordMetric('quiz_submission_error', 1, {
+        teamId: team?.id,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
   };
 
@@ -290,185 +378,218 @@ export const QuizInterface = () => {
   const answeredCount = Object.keys(quizState.answers).length;
 
   return (
-    <div className="min-h-screen bg-background p-4">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <Card variant="glass" className="mb-6">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h1 className="text-2xl font-bold flex items-center gap-2">
-                  <Brain className="w-6 h-6 text-primary" />
-                  {quizState.roundData?.round_info.round_name || "Aptitude Arena"} - Round 1
-                </h1>
-                <p className="text-muted-foreground">Team: {team.team_name}</p>
-                {quizState.roundData && (
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {quizState.roundData.round_info.description}
-                  </p>
-                )}
-              </div>
-              <div className="text-right">
-                <div className={`text-2xl font-mono font-bold ${
-                  quizState.timeRemaining < 300 ? 'text-destructive' : 'text-primary'
-                }`}>
-                  <Clock className="w-5 h-5 inline mr-2" />
-                  {formatTime(quizState.timeRemaining)}
-                </div>
-                <p className="text-sm text-muted-foreground">Time Remaining</p>
-              </div>
-            </div>
-            
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <Badge variant="outline">
-                  Question {quizState.currentQuestionIndex + 1} of {quizState.questions.length}
-                </Badge>
-                <Badge variant="secondary">
-                  {answeredCount} Answered
-                </Badge>
-              </div>
-              <Progress value={progress} className="w-48" />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Question */}
-        {currentQuestion && (
-          <Card variant="neon" className="mb-6">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-xl">
-                  Question {quizState.currentQuestionIndex + 1}
-                </CardTitle>
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline">{currentQuestion.category}</Badge>
-                  <Badge variant={
-                    currentQuestion.difficulty === 'easy' ? 'success' :
-                    currentQuestion.difficulty === 'medium' ? 'warning' :
-                    'destructive'
-                  }>
-                    {currentQuestion.difficulty}
-                  </Badge>
-                  <Badge variant="outline">{currentQuestion.points} pts</Badge>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-lg mb-6 leading-relaxed">{currentQuestion.question}</p>
-              
-              <div className="space-y-3">
-                {currentQuestion.options.map((option, index) => (
-                  <motion.button
-                    key={index}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => selectAnswer(currentQuestion.id, index)}
-                    className={`w-full p-4 text-left rounded-lg border-2 transition-all ${
-                      quizState.answers[currentQuestion.id] === index
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : 'border-border hover:border-primary/50 hover:bg-muted/50'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="w-8 h-8 rounded-full border-2 border-current flex items-center justify-center font-bold">
-                        {String.fromCharCode(65 + index)}
-                      </span>
-                      <span>{option}</span>
-                      {quizState.answers[currentQuestion.id] === index && (
-                        <CheckCircle className="w-5 h-5 ml-auto" />
-                      )}
-                    </div>
-                  </motion.button>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Navigation */}
-        <div className="flex items-center justify-between">
-          <Button
-            variant="outline"
-            onClick={() => goToQuestion(quizState.currentQuestionIndex - 1)}
-            disabled={quizState.currentQuestionIndex === 0}
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Previous
-          </Button>
-
-          <div className="flex items-center gap-2">
-            {quizState.questions.map((_, index) => (
+    <div className="h-screen bg-background flex overflow-hidden">
+      {/* Ultra Compact Question List Sidebar */}
+      <div className="w-32 lg:w-36 bg-card/50 border-r border-border/50 flex flex-col">
+        {/* Minimal Header */}
+        <div className="p-2 border-b border-border/50">
+          <div className="text-xs font-bold text-primary mb-1">Questions</div>
+          <div className="text-xs text-muted-foreground">
+            {answeredCount}/{quizState.questions.length}
+          </div>
+          <div className={`text-xs font-mono mt-1 ${
+            quizState.timeRemaining < 300 ? 'text-destructive' : 'text-primary'
+          }`}>
+            <Clock className="w-3 h-3 inline mr-1" />
+            {formatTime(quizState.timeRemaining)}
+          </div>
+        </div>
+        
+        {/* Question Navigation - Ultra Compact Grid */}
+        <div className="flex-1 overflow-y-auto p-1">
+          <div className="grid grid-cols-3 gap-1">
+            {quizState.questions.map((question, index) => (
               <button
-                key={index}
+                key={question.id}
                 onClick={() => goToQuestion(index)}
-                className={`w-10 h-10 rounded-lg border-2 font-bold transition-all ${
-                  index === quizState.currentQuestionIndex
-                    ? 'border-primary bg-primary text-primary-foreground'
-                    : quizState.answers[quizState.questions[index]?.id] !== undefined
-                      ? 'border-green-500 bg-green-500/20 text-green-500'
-                      : 'border-border hover:border-primary/50'
-                }`}
+                className={`
+                  aspect-square text-xs font-mono rounded flex items-center justify-center transition-all
+                  ${index === quizState.currentQuestionIndex
+                    ? 'bg-primary text-primary-foreground shadow-lg' 
+                    : quizState.answers[question.id] !== undefined
+                      ? 'bg-green-500/20 text-green-500 border border-green-500/30'
+                      : 'bg-muted hover:bg-muted/80'
+                  }
+                `}
               >
                 {index + 1}
               </button>
             ))}
           </div>
+        </div>
 
-          <div className="flex items-center gap-2">
-            {quizState.currentQuestionIndex < quizState.questions.length - 1 ? (
-              <Button
-                variant="outline"
-                onClick={() => goToQuestion(quizState.currentQuestionIndex + 1)}
-              >
-                Next
-                <ArrowRight className="w-4 h-4" />
-              </Button>
-            ) : (
-              <Button
-                variant="neon"
-                onClick={() => setIsSubmitDialogOpen(true)}
-              >
-                <Flag className="w-4 h-4" />
-                Submit Quiz
-              </Button>
-            )}
+        {/* Compact Submit Button */}
+        <div className="p-2 border-t border-border/50">
+          <Button 
+            variant="neon" 
+            size="sm" 
+            className="w-full text-xs py-1"
+            onClick={() => setIsSubmitDialogOpen(true)}
+            disabled={answeredCount === 0}
+          >
+            <Flag className="w-3 h-3 mr-1" />
+            Submit
+          </Button>
+        </div>
+      </div>
+
+      {/* Main Question Area - Maximum Space */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Minimal Top Bar */}
+        <div className="p-2 border-b border-border/50 bg-card/30 flex-shrink-0">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Brain className="w-4 h-4 text-primary" />
+              <span className="text-sm font-semibold">Round 1</span>
+              <Badge variant="outline" className="text-xs px-1 py-0">
+                {quizState.currentQuestionIndex + 1}/{quizState.questions.length}
+              </Badge>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {team.team_name}
+            </div>
           </div>
         </div>
 
-        {/* Submit Confirmation Dialog */}
-        <Dialog open={isSubmitDialogOpen} onOpenChange={setIsSubmitDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Submit Quiz?</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <p>Are you sure you want to submit your quiz?</p>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <p className="font-semibold">Questions Answered:</p>
-                  <p>{answeredCount} out of {quizState.questions.length}</p>
+        {/* Question Content - Maximum Space */}
+        <div className="flex-1 p-4 overflow-y-auto">
+          {currentQuestion && (
+            <div className="max-w-5xl mx-auto h-full flex flex-col">
+              {/* Question Header - Ultra Compact */}
+              <div className="flex items-center justify-between mb-3 flex-shrink-0">
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-xs px-2 py-0">{currentQuestion.category}</Badge>
+                  <Badge variant="outline" className="text-xs px-2 py-0">{currentQuestion.difficulty}</Badge>
                 </div>
-                <div>
-                  <p className="font-semibold">Time Remaining:</p>
-                  <p>{formatTime(quizState.timeRemaining)}</p>
-                </div>
+                <Badge variant="success" className="text-xs px-2 py-0">{currentQuestion.points} pts</Badge>
               </div>
-              <p className="text-sm text-muted-foreground">
-                Once submitted, you cannot change your answers.
-              </p>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setIsSubmitDialogOpen(false)}>
-                  Cancel
+              
+              {/* Question Text - Large and Clear */}
+              <div className="mb-4 flex-shrink-0">
+                <h2 className="text-2xl lg:text-3xl font-semibold leading-relaxed">
+                  {currentQuestion.question}
+                </h2>
+              </div>
+
+              {/* Answer Options - Maximum Space */}
+              <div className="flex-1 space-y-3">
+                {currentQuestion.options.map((option, index) => (
+                  <motion.button
+                    key={index}
+                    whileHover={{ scale: 1.01 }}
+                    whileTap={{ scale: 0.99 }}
+                    onClick={() => selectAnswer(currentQuestion.id, index)}
+                    className={`
+                      w-full p-5 lg:p-6 text-left rounded-lg border-2 transition-all
+                      ${quizState.answers[currentQuestion.id] === index
+                        ? 'border-primary bg-primary/10 text-primary shadow-lg'
+                        : 'border-border hover:border-primary/50 hover:bg-muted/50'
+                      }
+                    `}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className={`
+                        w-10 h-10 lg:w-12 lg:h-12 rounded-full border-2 flex items-center justify-center text-base lg:text-lg font-bold
+                        ${quizState.answers[currentQuestion.id] === index
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : 'border-muted-foreground'
+                        }
+                      `}>
+                        {String.fromCharCode(65 + index)}
+                      </div>
+                      <span className="text-lg lg:text-xl flex-1 leading-relaxed">{option}</span>
+                      {quizState.answers[currentQuestion.id] === index && (
+                        <CheckCircle className="w-6 h-6 lg:w-7 lg:h-7 text-primary" />
+                      )}
+                    </div>
+                  </motion.button>
+                ))}
+              </div>
+
+              {/* Navigation - Ultra Minimal */}
+              <div className="flex justify-between items-center mt-4 pt-3 border-t border-border/50 flex-shrink-0">
+                <Button
+                  variant="outline"
+                  onClick={() => goToQuestion(quizState.currentQuestionIndex - 1)}
+                  disabled={quizState.currentQuestionIndex === 0}
+                  size="sm"
+                >
+                  <ArrowLeft className="w-4 h-4 mr-1" />
+                  Prev
                 </Button>
-                <Button variant="neon" onClick={submitQuiz}>
-                  Submit Quiz
+                
+                <div className="text-sm text-muted-foreground">
+                  {quizState.answers[currentQuestion.id] !== undefined ? (
+                    <span className="text-green-500 flex items-center gap-1">
+                      <CheckCircle className="w-4 h-4" />
+                      Done
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1">
+                      <AlertCircle className="w-4 h-4" />
+                      Pending
+                    </span>
+                  )}
+                </div>
+
+                <Button
+                  variant="outline"
+                  onClick={() => goToQuestion(quizState.currentQuestionIndex + 1)}
+                  disabled={quizState.currentQuestionIndex === quizState.questions.length - 1}
+                  size="sm"
+                >
+                  Next
+                  <ArrowRight className="w-4 h-4 ml-1" />
                 </Button>
               </div>
             </div>
-          </DialogContent>
-        </Dialog>
+          )}
+        </div>
       </div>
+
+      {/* Submit Dialog - Unchanged */}
+      <Dialog open={isSubmitDialogOpen} onOpenChange={setIsSubmitDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Submit Quiz?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p>Are you sure you want to submit your quiz?</p>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="font-semibold">Questions Answered:</p>
+                <p>{answeredCount} out of {quizState.questions.length}</p>
+              </div>
+              <div>
+                <p className="font-semibold">Time Remaining:</p>
+                <p>{formatTime(quizState.timeRemaining)}</p>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Once submitted, you cannot change your answers.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsSubmitDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button 
+                variant="neon" 
+                onClick={submitQuiz}
+                disabled={quizState.isEvaluating}
+              >
+                {quizState.isEvaluating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Evaluating...
+                  </>
+                ) : (
+                  "Submit Quiz"
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Admin Controls</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            font-family: monospace;
+            max-width: 1000px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #00ff00;
+        }
+        .container {
+            background: #2a2a2a;
+            padding: 30px;
+            border-radius: 8px;
+            border: 1px solid #00ff00;
+        }
+        h1 { color: #00ff00; text-align: center; }
+        .test-result {
+            margin: 10px 0;
+            padding: 10px;
+            border-left: 4px solid #00ff00;
+            background: #333;
+        }
+        .error { border-left-color: #ff0000; color: #ff6666; }
+        .success { border-left-color: #00ff00; color: #66ff66; }
+        .warning { border-left-color: #ffff00; color: #ffff66; }
+        button {
+            background: #333;
+            color: #00ff00;
+            border: 1px solid #00ff00;
+            padding: 10px 20px;
+            margin: 10px 5px;
+            cursor: pointer;
+            font-family: monospace;
+        }
+        button:hover { background: #00ff00; color: #000; }
+        .data-block {
+            background: #1a1a1a;
+            border: 1px solid #444;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Debug Admin Controls</h1>
+        
+        <div>
+            <h3>Step 1: Check Database Tables</h3>
+            <button onclick="checkTables()">Check Tables</button>
+            <div id="tablesResult"></div>
+        </div>
+
+        <div>
+            <h3>Step 2: Check Game State</h3>
+            <button onclick="checkGameState()">Check Game State</button>
+            <div id="gameStateResult"></div>
+        </div>
+
+        <div>
+            <h3>Step 3: Check Rounds</h3>
+            <button onclick="checkRounds()">Check Rounds</button>
+            <div id="roundsResult"></div>
+        </div>
+
+        <div>
+            <h3>Step 4: Test Competition Toggle</h3>
+            <button onclick="testToggleCompetition()">Test Toggle</button>
+            <div id="toggleResult"></div>
+        </div>
+
+        <div>
+            <h3>Step 5: Test Round Start</h3>
+            <button onclick="testStartRound()">Test Start Round 1</button>
+            <div id="roundStartResult"></div>
+        </div>
+
+        <div>
+            <h3>Step 6: Initialize Missing Data</h3>
+            <button onclick="initializeData()">Initialize Missing Data</button>
+            <div id="initResult"></div>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = "https://wscdzjtwaxunorfmpuzl.supabase.co";
+        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndzY2R6anR3YXh1bm9yZm1wdXpsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk2NTU1NDQsImV4cCI6MjA4NTIzMTU0NH0.0zDOMWXle1bwyM5LJpgh3PdEQq1n7E-mmL8adMZiWlc";
+
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        
+        function log(message, type = 'info', containerId = 'results') {
+            const container = document.getElementById(containerId);
+            if (container) {
+                const div = document.createElement('div');
+                div.className = `test-result ${type}`;
+                div.innerHTML = `<strong>[${new Date().toLocaleTimeString()}]</strong> ${message}`;
+                container.appendChild(div);
+                container.scrollTop = container.scrollHeight;
+            }
+        }
+
+        async function checkTables() {
+            const container = document.getElementById('tablesResult');
+            container.innerHTML = '';
+            
+            log('🔍 Checking database tables...', 'info', 'tablesResult');
+            
+            try {
+                // Check game_state table
+                const { data: gameStateData, error: gameStateError } = await supabase
+                    .from('game_state')
+                    .select('*');
+                
+                if (gameStateError) {
+                    log(`❌ game_state table error: ${gameStateError.message}`, 'error', 'tablesResult');
+                } else {
+                    log(`✅ game_state table accessible, ${gameStateData.length} records`, 'success', 'tablesResult');
+                    if (gameStateData.length > 0) {
+                        log(`Current state: ${JSON.stringify(gameStateData[0], null, 2)}`, 'info', 'tablesResult');
+                    }
+                }
+
+                // Check rounds table
+                const { data: roundsData, error: roundsError } = await supabase
+                    .from('rounds')
+                    .select('*');
+                
+                if (roundsError) {
+                    log(`❌ rounds table error: ${roundsError.message}`, 'error', 'tablesResult');
+                } else {
+                    log(`✅ rounds table accessible, ${roundsData.length} records`, 'success', 'tablesResult');
+                    roundsData.forEach(round => {
+                        log(`Round ${round.round_number}: ${round.round_name} (Active: ${round.is_active})`, 'info', 'tablesResult');
+                    });
+                }
+
+            } catch (error) {
+                log(`❌ Table check failed: ${error.message}`, 'error', 'tablesResult');
+            }
+        }
+
+        async function checkGameState() {
+            const container = document.getElementById('gameStateResult');
+            container.innerHTML = '';
+            
+            log('🔍 Checking game state...', 'info', 'gameStateResult');
+            
+            try {
+                const { data, error } = await supabase
+                    .from('game_state')
+                    .select('*')
+                    .single();
+                
+                if (error) {
+                    log(`❌ Error: ${error.message}`, 'error', 'gameStateResult');
+                    if (error.code === 'PGRST116') {
+                        log(`💡 No game state record found - needs initialization`, 'warning', 'gameStateResult');
+                    }
+                } else {
+                    log(`✅ Game state found:`, 'success', 'gameStateResult');
+                    log(`<div class="data-block">${JSON.stringify(data, null, 2)}</div>`, 'info', 'gameStateResult');
+                }
+                
+            } catch (error) {
+                log(`❌ Check failed: ${error.message}`, 'error', 'gameStateResult');
+            }
+        }
+
+        async function checkRounds() {
+            const container = document.getElementById('roundsResult');
+            container.innerHTML = '';
+            
+            log('🔍 Checking rounds...', 'info', 'roundsResult');
+            
+            try {
+                const { data, error } = await supabase
+                    .from('rounds')
+                    .select('*')
+                    .order('round_number');
+                
+                if (error) {
+                    log(`❌ Error: ${error.message}`, 'error', 'roundsResult');
+                } else {
+                    log(`✅ Found ${data.length} rounds:`, 'success', 'roundsResult');
+                    log(`<div class="data-block">${JSON.stringify(data, null, 2)}</div>`, 'info', 'roundsResult');
+                }
+                
+            } catch (error) {
+                log(`❌ Check failed: ${error.message}`, 'error', 'roundsResult');
+            }
+        }
+
+        async function testToggleCompetition() {
+            const container = document.getElementById('toggleResult');
+            container.innerHTML = '';
+            
+            log('🔄 Testing competition toggle...', 'info', 'toggleResult');
+            
+            try {
+                // First get current state
+                const { data: currentState, error: fetchError } = await supabase
+                    .from('game_state')
+                    .select('*')
+                    .single();
+                
+                if (fetchError) {
+                    log(`❌ Cannot fetch current state: ${fetchError.message}`, 'error', 'toggleResult');
+                    return;
+                }
+
+                log(`Current state: ${currentState.is_competition_active}`, 'info', 'toggleResult');
+
+                // Toggle the state
+                const { error: updateError } = await supabase
+                    .from('game_state')
+                    .update({ is_competition_active: !currentState.is_competition_active })
+                    .eq('id', currentState.id);
+                
+                if (updateError) {
+                    log(`❌ Update failed: ${updateError.message}`, 'error', 'toggleResult');
+                } else {
+                    log(`✅ Competition ${currentState.is_competition_active ? 'paused' : 'started'}!`, 'success', 'toggleResult');
+                }
+                
+            } catch (error) {
+                log(`❌ Toggle test failed: ${error.message}`, 'error', 'toggleResult');
+            }
+        }
+
+        async function testStartRound() {
+            const container = document.getElementById('roundStartResult');
+            container.innerHTML = '';
+            
+            log('🚀 Testing round start...', 'info', 'roundStartResult');
+            
+            try {
+                // Deactivate all rounds first
+                const { error: deactivateError } = await supabase
+                    .from('rounds')
+                    .update({ is_active: false })
+                    .neq('round_number', 0);
+
+                if (deactivateError) {
+                    log(`❌ Failed to deactivate rounds: ${deactivateError.message}`, 'error', 'roundStartResult');
+                    return;
+                }
+
+                // Activate round 1
+                const { error: activateError } = await supabase
+                    .from('rounds')
+                    .update({ 
+                        is_active: true, 
+                        start_time: new Date().toISOString() 
+                    })
+                    .eq('round_number', 1);
+
+                if (activateError) {
+                    log(`❌ Failed to activate round 1: ${activateError.message}`, 'error', 'roundStartResult');
+                    return;
+                }
+
+                // Update game state
+                const { data: gameState, error: fetchGameError } = await supabase
+                    .from('game_state')
+                    .select('*')
+                    .single();
+
+                if (fetchGameError) {
+                    log(`❌ Cannot fetch game state: ${fetchGameError.message}`, 'error', 'roundStartResult');
+                    return;
+                }
+
+                const { error: updateGameError } = await supabase
+                    .from('game_state')
+                    .update({ 
+                        current_round: 1, 
+                        is_competition_active: true 
+                    })
+                    .eq('id', gameState.id);
+
+                if (updateGameError) {
+                    log(`❌ Failed to update game state: ${updateGameError.message}`, 'error', 'roundStartResult');
+                } else {
+                    log(`✅ Round 1 started successfully!`, 'success', 'roundStartResult');
+                }
+                
+            } catch (error) {
+                log(`❌ Round start test failed: ${error.message}`, 'error', 'roundStartResult');
+            }
+        }
+
+        async function initializeData() {
+            const container = document.getElementById('initResult');
+            container.innerHTML = '';
+            
+            log('🔧 Initializing missing data...', 'info', 'initResult');
+            
+            try {
+                // Check if game_state exists
+                const { data: gameStateData, error: gameStateError } = await supabase
+                    .from('game_state')
+                    .select('*');
+                
+                if (gameStateError) {
+                    log(`❌ Cannot check game_state: ${gameStateError.message}`, 'error', 'initResult');
+                    return;
+                }
+
+                if (gameStateData.length === 0) {
+                    log('📝 Creating initial game state...', 'info', 'initResult');
+                    const { error: insertError } = await supabase
+                        .from('game_state')
+                        .insert({
+                            current_round: 0,
+                            is_competition_active: false
+                        });
+                    
+                    if (insertError) {
+                        log(`❌ Failed to create game state: ${insertError.message}`, 'error', 'initResult');
+                    } else {
+                        log(`✅ Game state initialized`, 'success', 'initResult');
+                    }
+                }
+
+                // Check if rounds exist
+                const { data: roundsData, error: roundsError } = await supabase
+                    .from('rounds')
+                    .select('*');
+                
+                if (roundsError) {
+                    log(`❌ Cannot check rounds: ${roundsError.message}`, 'error', 'initResult');
+                    return;
+                }
+
+                if (roundsData.length === 0) {
+                    log('📝 Creating default rounds...', 'info', 'initResult');
+                    const { error: insertRoundsError } = await supabase
+                        .from('rounds')
+                        .insert([
+                            {
+                                round_number: 1,
+                                round_name: 'Aptitude Arena',
+                                round_type: 'quiz',
+                                time_limit_seconds: 1800,
+                                is_active: false
+                            },
+                            {
+                                round_number: 2,
+                                round_name: 'Constraint Paradox',
+                                round_type: 'constraint',
+                                time_limit_seconds: 3600,
+                                is_active: false
+                            },
+                            {
+                                round_number: 3,
+                                round_name: 'Code Jeopardy',
+                                round_type: 'jeopardy',
+                                time_limit_seconds: 5400,
+                                is_active: false
+                            }
+                        ]);
+                    
+                    if (insertRoundsError) {
+                        log(`❌ Failed to create rounds: ${insertRoundsError.message}`, 'error', 'initResult');
+                    } else {
+                        log(`✅ Default rounds created`, 'success', 'initResult');
+                    }
+                }
+
+                log('✅ Data initialization complete!', 'success', 'initResult');
+                
+            } catch (error) {
+                log(`❌ Initialization failed: ${error.message}`, 'error', 'initResult');
+            }
+        }
+
+        // Auto-run checks on load
+        window.addEventListener('load', () => {
+            checkTables();
+        });
+    </script>
+</body>
+</html>

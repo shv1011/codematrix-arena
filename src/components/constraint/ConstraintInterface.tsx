@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/components/auth/AuthContext";
 import { QuestionLoader, Round2Question, Round2Data } from "@/lib/questionLoader";
 import { aiEvaluationService, EvaluationRequest } from "@/lib/aiEvaluation";
+import { cumulativeScoring } from "@/lib/cumulativeScoring";
 import { CodeEditor } from "./CodeEditor";
 import { toast } from "sonner";
 import { 
@@ -97,10 +98,13 @@ export const ConstraintInterface = () => {
     }
   }, [user?.email]);
 
-  // Fetch constraint questions from JSON
+  // Fetch constraint questions from JSON with shuffling
   const fetchQuestions = useCallback(async () => {
     try {
-      const roundData = await QuestionLoader.loadRound2Questions();
+      const roundData = await QuestionLoader.loadRound2Questions({
+        shuffle: true, // Enable question shuffling
+        teamId: team?.id // Use team ID for consistent shuffling
+      });
       
       setConstraintState(prev => ({
         ...prev,
@@ -112,7 +116,7 @@ export const ConstraintInterface = () => {
       console.error("Error fetching questions:", error);
       toast.error("Failed to load constraint questions");
     }
-  }, []);
+  }, [team?.id]);
 
   // Fetch game state
   const fetchGameState = useCallback(async () => {
@@ -226,11 +230,21 @@ export const ConstraintInterface = () => {
         team.id,
         questionId.toString(),
         2,
-        evaluationRequest
+        evaluationRequest,
+        question.points // Pass question weightage for Round 2
       );
 
-      // Calculate points based on AI evaluation
-      const pointsEarned = result.isCorrect ? question.points : Math.floor(question.points * (result.score / 100));
+      // Round 2: Points based on question weightage (already calculated in AI service)
+      const pointsEarned = result.points;
+
+      // Get round ID
+      const { data: roundData, error: roundError } = await supabase
+        .from("rounds")
+        .select("id")
+        .eq("round_number", 2)
+        .single();
+
+      if (roundError) throw roundError;
 
       // Save submission to database
       const { error: submissionError } = await supabase
@@ -238,15 +252,20 @@ export const ConstraintInterface = () => {
         .insert({
           team_id: team.id,
           question_id: questionId.toString(),
-          round_number: 2,
+          round_id: roundData.id,
+          question_text: question.question,
           answer: submission.code,
           is_correct: result.isCorrect,
           points_earned: pointsEarned,
+          ai_feedback: result.feedback,
           ai_evaluation: result,
           submitted_at: new Date().toISOString()
         });
 
       if (submissionError) throw submissionError;
+
+      // Update team score using cumulative scoring system
+      await cumulativeScoring.updateRoundScore(team.id, 2, pointsEarned);
 
       // Update local state
       setConstraintState(prev => ({
@@ -263,7 +282,11 @@ export const ConstraintInterface = () => {
         totalScore: prev.totalScore + pointsEarned
       }));
 
-      toast.success(`Solution evaluated! Score: ${result.score}/100 (${pointsEarned} points)`);
+      toast.success(
+        result.isCorrect 
+          ? `Correct! +${pointsEarned} points` 
+          : `Incorrect! ${pointsEarned} points (negative marking)`
+      );
 
     } catch (error) {
       console.error("Error submitting solution:", error);
@@ -392,209 +415,215 @@ export const ConstraintInterface = () => {
   const currentSubmission = constraintState.submissions[currentQuestion?.id] || { code: '', language: selectedLanguage };
 
   return (
-    <div className="min-h-screen bg-background p-4">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <Card variant="glass" className="mb-6">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h1 className="text-2xl font-bold flex items-center gap-2">
-                  <Zap className="w-6 h-6 text-primary" />
-                  {constraintState.roundData?.round_info.round_name || "Constraint Paradox"} - Round 2
-                </h1>
-                <p className="text-muted-foreground">Team: {team.team_name}</p>
-                {constraintState.roundData && (
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {constraintState.roundData.round_info.description}
-                  </p>
-                )}
-              </div>
-              <div className="text-right">
-                <div className={`text-2xl font-mono font-bold ${
-                  constraintState.timeRemaining < 600 ? 'text-destructive' : 'text-primary'
-                }`}>
-                  <Clock className="w-5 h-5 inline mr-2" />
-                  {formatTime(constraintState.timeRemaining)}
-                </div>
-                <p className="text-sm text-muted-foreground">Time Remaining</p>
-              </div>
-            </div>
-            
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <Badge variant="outline">
-                  Question {constraintState.currentQuestionIndex + 1} of {constraintState.questions.length}
-                </Badge>
-                <Badge variant="secondary">
-                  {submittedCount} Submitted
-                </Badge>
-                <Badge variant="outline">
-                  {constraintState.totalScore} Points
-                </Badge>
-              </div>
-              <Progress value={progress} className="w-48" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Question Panel */}
-          <div className="space-y-6">
-            {/* Question */}
-            {currentQuestion && (
-              <Card variant="neon">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-xl">
-                      Question {constraintState.currentQuestionIndex + 1}
-                    </CardTitle>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline">{currentQuestion.category}</Badge>
-                      <Badge variant={
-                        currentQuestion.difficulty === 'easy' ? 'success' :
-                        currentQuestion.difficulty === 'medium' ? 'warning' :
-                        'destructive'
-                      }>
-                        {currentQuestion.difficulty}
-                      </Badge>
-                      <Badge variant="outline">{currentQuestion.points} pts</Badge>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-lg mb-6 leading-relaxed">{currentQuestion.question}</p>
-                  
-                  {/* Constraints */}
-                  <div className="mb-6">
-                    <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                      <AlertTriangle className="w-5 h-5 text-yellow-500" />
-                      Constraints
-                    </h3>
-                    <div className="space-y-2">
-                      {currentQuestion.constraints.map((constraint, index) => (
-                        <div key={index} className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
-                          <p className="text-sm text-yellow-700 dark:text-yellow-300">{constraint}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Sample Input/Output */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <h4 className="font-semibold mb-2">Sample Input:</h4>
-                      <pre className="p-3 bg-muted rounded-lg text-sm font-mono">{currentQuestion.sample_input}</pre>
-                    </div>
-                    <div>
-                      <h4 className="font-semibold mb-2">Sample Output:</h4>
-                      <pre className="p-3 bg-muted rounded-lg text-sm font-mono">{currentQuestion.sample_output}</pre>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Navigation */}
-            <div className="flex items-center justify-between">
-              <Button
-                variant="outline"
-                onClick={() => goToQuestion(constraintState.currentQuestionIndex - 1)}
-                disabled={constraintState.currentQuestionIndex === 0}
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Previous
-              </Button>
-
-              <div className="flex items-center gap-2">
-                {constraintState.questions.map((_, index) => (
-                  <button
-                    key={index}
-                    onClick={() => goToQuestion(index)}
-                    className={`w-10 h-10 rounded-lg border-2 font-bold transition-all ${
-                      index === constraintState.currentQuestionIndex
-                        ? 'border-primary bg-primary text-primary-foreground'
-                        : constraintState.submissions[constraintState.questions[index]?.id]?.submittedAt
-                          ? 'border-green-500 bg-green-500/20 text-green-500'
-                          : 'border-border hover:border-primary/50'
-                    }`}
-                  >
-                    {index + 1}
-                  </button>
-                ))}
-              </div>
-
-              <Button
-                variant="outline"
-                onClick={() => goToQuestion(constraintState.currentQuestionIndex + 1)}
-                disabled={constraintState.currentQuestionIndex === constraintState.questions.length - 1}
-              >
-                Next
-                <ArrowRight className="w-4 h-4" />
-              </Button>
-            </div>
+    <div className="h-screen bg-background flex overflow-hidden">
+      {/* Ultra Compact Question List Sidebar */}
+      <div className="w-32 lg:w-36 bg-card/50 border-r border-border/50 flex flex-col">
+        {/* Minimal Header */}
+        <div className="p-2 border-b border-border/50">
+          <div className="text-xs font-bold text-primary mb-1">Round 2</div>
+          <div className="text-xs text-muted-foreground">
+            {submittedCount}/{constraintState.questions.length}
           </div>
-
-          {/* Code Editor Panel */}
-          <div className="space-y-6">
-            <CodeEditor
-              value={currentSubmission.code}
-              onChange={(code) => currentQuestion && updateCode(currentQuestion.id, code)}
-              language={selectedLanguage}
-              onLanguageChange={setSelectedLanguage}
-              onSubmit={() => currentQuestion && submitSolution(currentQuestion.id)}
-              isSubmitting={currentSubmission.isEvaluating}
-              isSubmitted={!!currentSubmission.submittedAt}
-              result={currentSubmission.result}
-              height="500px"
-            />
-
-            {/* Submit All Button */}
-            <Button
-              variant="neon"
-              size="lg"
-              className="w-full"
-              onClick={() => setIsSubmitDialogOpen(true)}
-            >
-              <Flag className="w-4 h-4" />
-              Submit All Solutions
-            </Button>
+          <div className={`text-xs font-mono mt-1 ${
+            constraintState.timeRemaining < 600 ? 'text-destructive' : 'text-primary'
+          }`}>
+            <Clock className="w-3 h-3 inline mr-1" />
+            {formatTime(constraintState.timeRemaining)}
+          </div>
+        </div>
+        
+        {/* Question Navigation - Ultra Compact Grid */}
+        <div className="flex-1 overflow-y-auto p-1">
+          <div className="grid grid-cols-3 gap-1">
+            {constraintState.questions.map((question, index) => (
+              <button
+                key={question.id}
+                onClick={() => goToQuestion(index)}
+                className={`
+                  aspect-square text-xs font-mono rounded flex items-center justify-center transition-all
+                  ${index === constraintState.currentQuestionIndex
+                    ? 'bg-primary text-primary-foreground shadow-lg' 
+                    : constraintState.submissions[question.id]?.submittedAt
+                      ? 'bg-green-500/20 text-green-500 border border-green-500/30'
+                      : constraintState.submissions[question.id]?.code
+                        ? 'bg-yellow-500/20 text-yellow-500 border border-yellow-500/30'
+                        : 'bg-muted hover:bg-muted/80'
+                  }
+                `}
+              >
+                {index + 1}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Submit Confirmation Dialog */}
-        <Dialog open={isSubmitDialogOpen} onOpenChange={setIsSubmitDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Submit All Solutions?</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <p>Are you sure you want to submit all your solutions for Round 2?</p>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <p className="font-semibold">Solutions Submitted:</p>
-                  <p>{submittedCount} out of {constraintState.questions.length}</p>
+        {/* Compact Submit Button */}
+        <div className="p-2 border-t border-border/50">
+          <Button 
+            variant="neon" 
+            size="sm" 
+            className="w-full text-xs py-1"
+            onClick={() => setIsSubmitDialogOpen(true)}
+          >
+            <Flag className="w-3 h-3 mr-1" />
+            Submit All
+          </Button>
+        </div>
+      </div>
+
+      {/* Main Content Area - Maximum Space */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Minimal Top Bar */}
+        <div className="p-2 border-b border-border/50 bg-card/30 flex-shrink-0">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Zap className="w-4 h-4 text-primary" />
+              <span className="text-sm font-semibold">Constraint Paradox</span>
+              <Badge variant="outline" className="text-xs px-1 py-0">
+                {constraintState.currentQuestionIndex + 1}/{constraintState.questions.length}
+              </Badge>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {team.team_name} • {constraintState.totalScore} pts
+            </div>
+          </div>
+        </div>
+
+        {/* Split Content Area */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* Question Panel - 40% width */}
+          <div className="w-2/5 border-r border-border/50 overflow-y-auto p-4">
+            {currentQuestion && (
+              <div className="space-y-4">
+                {/* Question Header - Ultra Compact */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-xs px-2 py-0">{currentQuestion.category}</Badge>
+                    <Badge variant={
+                      currentQuestion.difficulty === 'easy' ? 'success' :
+                      currentQuestion.difficulty === 'medium' ? 'warning' :
+                      'destructive'
+                    } className="text-xs px-2 py-0">
+                      {currentQuestion.difficulty}
+                    </Badge>
+                  </div>
+                  <Badge variant="outline" className="text-xs px-2 py-0">{currentQuestion.points} pts</Badge>
                 </div>
+                
+                {/* Question Text - Large */}
                 <div>
-                  <p className="font-semibold">Current Score:</p>
-                  <p>{constraintState.totalScore} points</p>
+                  <h2 className="text-lg lg:text-xl font-semibold leading-relaxed mb-4">
+                    {currentQuestion.question}
+                  </h2>
                 </div>
+
+                {/* Constraints - Compact */}
+                <div>
+                  <h3 className="text-sm font-semibold mb-2 flex items-center gap-1">
+                    <AlertTriangle className="w-4 h-4 text-yellow-500" />
+                    Constraints
+                  </h3>
+                  <div className="space-y-2">
+                    {currentQuestion.constraints.map((constraint, index) => (
+                      <div key={index} className="p-2 bg-yellow-500/10 border border-yellow-500/30 rounded text-xs">
+                        {constraint}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Sample Input/Output - Compact */}
+                <div className="grid grid-cols-1 gap-3">
+                  <div>
+                    <h4 className="text-sm font-semibold mb-1">Sample Input:</h4>
+                    <pre className="p-2 bg-muted rounded text-xs font-mono">{currentQuestion.sample_input}</pre>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold mb-1">Sample Output:</h4>
+                    <pre className="p-2 bg-muted rounded text-xs font-mono">{currentQuestion.sample_output}</pre>
+                  </div>
+                </div>
+
+                {/* Result Display */}
+                {currentSubmission.result && (
+                  <div className={`p-3 rounded-lg border ${
+                    currentSubmission.result.isCorrect 
+                      ? 'bg-green-500/10 border-green-500/30' 
+                      : 'bg-red-500/10 border-red-500/30'
+                  }`}>
+                    <div className="flex items-center gap-2 mb-2">
+                      {currentSubmission.result.isCorrect ? (
+                        <CheckCircle className="w-4 h-4 text-green-500" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-red-500" />
+                      )}
+                      <span className="text-sm font-semibold">
+                        {currentSubmission.result.isCorrect ? 'Correct!' : 'Incorrect'}
+                      </span>
+                      <Badge variant="outline" className="text-xs">
+                        {currentSubmission.result.pointsEarned} pts
+                      </Badge>
+                    </div>
+                    {currentSubmission.result.feedback && (
+                      <p className="text-xs text-muted-foreground">{currentSubmission.result.feedback}</p>
+                    )}
+                  </div>
+                )}
               </div>
-              <p className="text-sm text-muted-foreground">
-                Once submitted, you cannot modify your solutions.
-              </p>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setIsSubmitDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button variant="neon" onClick={submitAllSolutions}>
-                  Submit All Solutions
-                </Button>
+            )}
+          </div>
+
+          {/* Code Editor Panel - 60% width, Maximum Space */}
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="flex-1 p-4">
+              <CodeEditor
+                value={currentSubmission.code}
+                onChange={(code) => currentQuestion && updateCode(currentQuestion.id, code)}
+                language={selectedLanguage}
+                onLanguageChange={setSelectedLanguage}
+                onSubmit={() => currentQuestion && submitSolution(currentQuestion.id)}
+                isSubmitting={currentSubmission.isEvaluating}
+                isSubmitted={!!currentSubmission.submittedAt}
+                result={currentSubmission.result}
+                height="calc(100vh - 120px)"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Submit Confirmation Dialog */}
+      <Dialog open={isSubmitDialogOpen} onOpenChange={setIsSubmitDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Submit All Solutions?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p>Are you sure you want to submit all your solutions for Round 2?</p>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="font-semibold">Solutions Submitted:</p>
+                <p>{submittedCount} out of {constraintState.questions.length}</p>
+              </div>
+              <div>
+                <p className="font-semibold">Current Score:</p>
+                <p>{constraintState.totalScore} points</p>
               </div>
             </div>
-          </DialogContent>
-        </Dialog>
-      </div>
+            <p className="text-sm text-muted-foreground">
+              Once submitted, you cannot modify your solutions.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsSubmitDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button variant="neon" onClick={submitAllSolutions}>
+                Submit All Solutions
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

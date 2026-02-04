@@ -1,492 +1,394 @@
-// Performance optimization utilities for CodeWars 2.0
+// Performance monitoring and optimization utilities
 
-import { supabase } from "@/integrations/supabase/client";
-
-// Cache management
-class CacheManager {
-  private cache: Map<string, { data: any; timestamp: number; ttl: number }> = new Map();
-  private maxSize = 100; // Maximum cache entries
-
-  set(key: string, data: any, ttlSeconds: number = 300): void {
-    // Remove oldest entries if cache is full
-    if (this.cache.size >= this.maxSize) {
-      const oldestKey = this.cache.keys().next().value;
-      this.cache.delete(oldestKey);
-    }
-
-    this.cache.set(key, {
-      data,
-      timestamp: Date.now(),
-      ttl: ttlSeconds * 1000
-    });
-  }
-
-  get(key: string): any | null {
-    const entry = this.cache.get(key);
-    
-    if (!entry) {
-      return null;
-    }
-
-    // Check if entry has expired
-    if (Date.now() - entry.timestamp > entry.ttl) {
-      this.cache.delete(key);
-      return null;
-    }
-
-    return entry.data;
-  }
-
-  delete(key: string): void {
-    this.cache.delete(key);
-  }
-
-  clear(): void {
-    this.cache.clear();
-  }
-
-  getStats(): { size: number; maxSize: number; hitRate: number } {
-    return {
-      size: this.cache.size,
-      maxSize: this.maxSize,
-      hitRate: 0 // Would need to track hits/misses for accurate calculation
-    };
-  }
+interface PerformanceMetric {
+  name: string;
+  value: number;
+  timestamp: number;
+  metadata?: Record<string, any>;
 }
 
-export const cacheManager = new CacheManager();
-
-// Database query optimization
-export class QueryOptimizer {
-  // Optimized team leaderboard query with caching
-  static async getOptimizedLeaderboard(useCache: boolean = true): Promise<any[]> {
-    const cacheKey = 'leaderboard_data';
-    
-    if (useCache) {
-      const cached = cacheManager.get(cacheKey);
-      if (cached) {
-        return cached;
-      }
-    }
-
-    try {
-      // Optimized query with selective fields and proper indexing
-      const { data, error } = await supabase
-        .from("teams")
-        .select(`
-          id,
-          team_name,
-          team_code,
-          round1_score,
-          round2_score,
-          round3_score,
-          total_score,
-          is_active,
-          is_disqualified,
-          round_eliminated
-        `)
-        .order("total_score", { ascending: false })
-        .limit(50); // Limit results for performance
-
-      if (error) throw error;
-
-      const processedData = data.map((team, index) => ({
-        ...team,
-        rank: index + 1,
-        round1_score: team.round1_score || 0,
-        round2_score: team.round2_score || 0,
-        round3_score: team.round3_score || 0,
-        total_score: team.total_score || 0
-      }));
-
-      if (useCache) {
-        cacheManager.set(cacheKey, processedData, 30); // Cache for 30 seconds
-      }
-
-      return processedData;
-
-    } catch (error) {
-      console.error("Error fetching optimized leaderboard:", error);
-      return [];
-    }
-  }
-
-  // Batch fetch team data
-  static async batchFetchTeams(teamIds: string[]): Promise<any[]> {
-    if (teamIds.length === 0) return [];
-
-    const cacheKey = `teams_batch_${teamIds.sort().join(',')}`;
-    const cached = cacheManager.get(cacheKey);
-    
-    if (cached) {
-      return cached;
-    }
-
-    try {
-      const { data, error } = await supabase
-        .from("teams")
-        .select("*")
-        .in("id", teamIds);
-
-      if (error) throw error;
-
-      cacheManager.set(cacheKey, data, 60); // Cache for 1 minute
-      return data;
-
-    } catch (error) {
-      console.error("Error batch fetching teams:", error);
-      return [];
-    }
-  }
-
-  // Optimized submission history query
-  static async getOptimizedSubmissions(
-    teamId?: string, 
-    roundNumber?: number,
-    limit: number = 100
-  ): Promise<any[]> {
-    const cacheKey = `submissions_${teamId || 'all'}_${roundNumber || 'all'}_${limit}`;
-    const cached = cacheManager.get(cacheKey);
-    
-    if (cached) {
-      return cached;
-    }
-
-    try {
-      let query = supabase
-        .from("submissions")
-        .select(`
-          id,
-          team_id,
-          question_id,
-          round_number,
-          is_correct,
-          points_earned,
-          submitted_at,
-          teams!inner(team_name)
-        `)
-        .order("submitted_at", { ascending: false })
-        .limit(limit);
-
-      if (teamId) {
-        query = query.eq("team_id", teamId);
-      }
-
-      if (roundNumber) {
-        query = query.eq("round_number", roundNumber);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-
-      cacheManager.set(cacheKey, data, 60); // Cache for 1 minute
-      return data;
-
-    } catch (error) {
-      console.error("Error fetching optimized submissions:", error);
-      return [];
-    }
-  }
+interface ComponentMetric {
+  componentName: string;
+  renderTime: number;
+  renderCount: number;
+  lastRender: number;
 }
 
-// Component performance monitoring
-export class PerformanceMonitor {
-  private static metrics: Map<string, {
-    renderCount: number;
-    totalRenderTime: number;
-    lastRenderTime: number;
-    averageRenderTime: number;
-  }> = new Map();
+class PerformanceMonitor {
+  private metrics: PerformanceMetric[] = [];
+  private componentMetrics: Map<string, ComponentMetric> = new Map();
+  private observers: Map<string, PerformanceObserver> = new Map();
+  private maxMetrics = 1000; // Keep last 1000 metrics
 
-  static startMeasure(componentName: string): () => void {
-    const startTime = performance.now();
-    
-    return () => {
-      const endTime = performance.now();
-      const renderTime = endTime - startTime;
-      
-      this.recordMetric(componentName, renderTime);
-    };
+  constructor() {
+    this.setupPerformanceObservers();
   }
 
-  private static recordMetric(componentName: string, renderTime: number): void {
-    const existing = this.metrics.get(componentName) || {
-      renderCount: 0,
-      totalRenderTime: 0,
-      lastRenderTime: 0,
-      averageRenderTime: 0
-    };
+  // Setup performance observers
+  private setupPerformanceObservers() {
+    if (typeof window === 'undefined') return;
 
-    existing.renderCount++;
-    existing.totalRenderTime += renderTime;
-    existing.lastRenderTime = renderTime;
-    existing.averageRenderTime = existing.totalRenderTime / existing.renderCount;
-
-    this.metrics.set(componentName, existing);
-
-    // Log slow renders
-    if (renderTime > 100) {
-      console.warn(`Slow render detected: ${componentName} took ${renderTime.toFixed(2)}ms`);
-    }
-  }
-
-  static getMetrics(): Record<string, any> {
-    const result: Record<string, any> = {};
-    
-    this.metrics.forEach((metric, componentName) => {
-      result[componentName] = {
-        ...metric,
-        lastRenderTime: Math.round(metric.lastRenderTime * 100) / 100,
-        averageRenderTime: Math.round(metric.averageRenderTime * 100) / 100
-      };
-    });
-
-    return result;
-  }
-
-  static clearMetrics(): void {
-    this.metrics.clear();
-  }
-}
-
-// Bundle size optimization helpers
-export const lazyLoadComponent = (importFn: () => Promise<any>) => {
-  return React.lazy(importFn);
-};
-
-// Image optimization
-export const optimizeImage = (src: string, width?: number, height?: number): string => {
-  // In a real implementation, this would integrate with an image optimization service
-  // For now, return the original src
-  return src;
-};
-
-// Memory management
-export class MemoryManager {
-  private static observers: Set<IntersectionObserver> = new Set();
-  private static timeouts: Set<NodeJS.Timeout> = new Set();
-  private static intervals: Set<NodeJS.Timeout> = new Set();
-
-  // Clean up intersection observers
-  static addObserver(observer: IntersectionObserver): void {
-    this.observers.add(observer);
-  }
-
-  static removeObserver(observer: IntersectionObserver): void {
-    observer.disconnect();
-    this.observers.delete(observer);
-  }
-
-  // Clean up timeouts
-  static addTimeout(timeout: NodeJS.Timeout): void {
-    this.timeouts.add(timeout);
-  }
-
-  static removeTimeout(timeout: NodeJS.Timeout): void {
-    clearTimeout(timeout);
-    this.timeouts.delete(timeout);
-  }
-
-  // Clean up intervals
-  static addInterval(interval: NodeJS.Timeout): void {
-    this.intervals.add(interval);
-  }
-
-  static removeInterval(interval: NodeJS.Timeout): void {
-    clearInterval(interval);
-    this.intervals.delete(interval);
-  }
-
-  // Clean up all resources
-  static cleanup(): void {
-    this.observers.forEach(observer => observer.disconnect());
-    this.timeouts.forEach(timeout => clearTimeout(timeout));
-    this.intervals.forEach(interval => clearInterval(interval));
-    
-    this.observers.clear();
-    this.timeouts.clear();
-    this.intervals.clear();
-    
-    cacheManager.clear();
-  }
-
-  // Get memory usage stats
-  static getMemoryStats(): {
-    observers: number;
-    timeouts: number;
-    intervals: number;
-    cacheSize: number;
-  } {
-    return {
-      observers: this.observers.size,
-      timeouts: this.timeouts.size,
-      intervals: this.intervals.size,
-      cacheSize: cacheManager.getStats().size
-    };
-  }
-}
-
-// Network optimization
-export class NetworkOptimizer {
-  private static requestQueue: Array<{
-    request: () => Promise<any>;
-    priority: number;
-    timestamp: number;
-  }> = [];
-  
-  private static isProcessing = false;
-  private static maxConcurrentRequests = 3;
-  private static activeRequests = 0;
-
-  // Add request to queue with priority
-  static queueRequest(
-    request: () => Promise<any>, 
-    priority: number = 1
-  ): Promise<any> {
-    return new Promise((resolve, reject) => {
-      this.requestQueue.push({
-        request: async () => {
-          try {
-            const result = await request();
-            resolve(result);
-            return result;
-          } catch (error) {
-            reject(error);
-            throw error;
-          }
-        },
-        priority,
-        timestamp: Date.now()
-      });
-
-      // Sort by priority (higher first) and timestamp (older first)
-      this.requestQueue.sort((a, b) => {
-        if (a.priority !== b.priority) {
-          return b.priority - a.priority;
-        }
-        return a.timestamp - b.timestamp;
-      });
-
-      this.processQueue();
-    });
-  }
-
-  private static async processQueue(): Promise<void> {
-    if (this.isProcessing || this.activeRequests >= this.maxConcurrentRequests) {
-      return;
-    }
-
-    if (this.requestQueue.length === 0) {
-      return;
-    }
-
-    this.isProcessing = true;
-    const requestItem = this.requestQueue.shift();
-
-    if (requestItem) {
-      this.activeRequests++;
-      
+    // Observe navigation timing
+    if ('PerformanceObserver' in window) {
       try {
-        await requestItem.request();
+        const navObserver = new PerformanceObserver((list) => {
+          const entries = list.getEntries();
+          entries.forEach((entry) => {
+            this.recordMetric('navigation', entry.duration, {
+              type: entry.entryType,
+              name: entry.name
+            });
+          });
+        });
+        navObserver.observe({ entryTypes: ['navigation'] });
+        this.observers.set('navigation', navObserver);
       } catch (error) {
-        console.error('Queued request failed:', error);
-      } finally {
-        this.activeRequests--;
+        console.warn('Navigation observer not supported:', error);
       }
-    }
 
-    this.isProcessing = false;
-    
-    // Process next request if queue is not empty
-    if (this.requestQueue.length > 0) {
-      setTimeout(() => this.processQueue(), 10);
+      // Observe resource loading
+      try {
+        const resourceObserver = new PerformanceObserver((list) => {
+          const entries = list.getEntries();
+          entries.forEach((entry) => {
+            if (entry.duration > 100) { // Only log slow resources
+              this.recordMetric('resource', entry.duration, {
+                name: entry.name,
+                type: entry.initiatorType
+              });
+            }
+          });
+        });
+        resourceObserver.observe({ entryTypes: ['resource'] });
+        this.observers.set('resource', resourceObserver);
+      } catch (error) {
+        console.warn('Resource observer not supported:', error);
+      }
+
+      // Observe long tasks
+      try {
+        const longTaskObserver = new PerformanceObserver((list) => {
+          const entries = list.getEntries();
+          entries.forEach((entry) => {
+            this.recordMetric('longtask', entry.duration, {
+              startTime: entry.startTime
+            });
+          });
+        });
+        longTaskObserver.observe({ entryTypes: ['longtask'] });
+        this.observers.set('longtask', longTaskObserver);
+      } catch (error) {
+        console.warn('Long task observer not supported:', error);
+      }
     }
   }
 
-  // Get queue stats
-  static getQueueStats(): {
-    queueLength: number;
-    activeRequests: number;
-    maxConcurrentRequests: number;
-  } {
-    return {
-      queueLength: this.requestQueue.length,
-      activeRequests: this.activeRequests,
-      maxConcurrentRequests: this.maxConcurrentRequests
+  // Record a performance metric
+  recordMetric(name: string, value: number, metadata?: Record<string, any>) {
+    const metric: PerformanceMetric = {
+      name,
+      value,
+      timestamp: Date.now(),
+      metadata
     };
+
+    this.metrics.push(metric);
+
+    // Keep only the last N metrics
+    if (this.metrics.length > this.maxMetrics) {
+      this.metrics = this.metrics.slice(-this.maxMetrics);
+    }
+
+    // Log performance issues
+    this.checkPerformanceThresholds(metric);
+  }
+
+  // Check for performance issues
+  private checkPerformanceThresholds(metric: PerformanceMetric) {
+    const thresholds = {
+      'api_call': 2000, // 2 seconds
+      'component_render': 16, // 16ms (60fps)
+      'database_query': 1000, // 1 second
+      'ai_evaluation': 10000, // 10 seconds
+      'longtask': 50, // 50ms
+      'resource': 1000 // 1 second
+    };
+
+    const threshold = thresholds[metric.name as keyof typeof thresholds];
+    if (threshold && metric.value > threshold) {
+      console.warn(`Performance issue detected: ${metric.name} took ${metric.value}ms (threshold: ${threshold}ms)`, metric.metadata);
+    }
+  }
+
+  // Time a function execution
+  async timeFunction<T>(name: string, fn: () => Promise<T> | T, metadata?: Record<string, any>): Promise<T> {
+    const startTime = performance.now();
+    try {
+      const result = await fn();
+      const duration = performance.now() - startTime;
+      this.recordMetric(name, duration, metadata);
+      return result;
+    } catch (error) {
+      const duration = performance.now() - startTime;
+      this.recordMetric(name, duration, { ...metadata, error: true });
+      throw error;
+    }
+  }
+
+  // Time a synchronous function
+  timeFunctionSync<T>(name: string, fn: () => T, metadata?: Record<string, any>): T {
+    const startTime = performance.now();
+    try {
+      const result = fn();
+      const duration = performance.now() - startTime;
+      this.recordMetric(name, duration, metadata);
+      return result;
+    } catch (error) {
+      const duration = performance.now() - startTime;
+      this.recordMetric(name, duration, { ...metadata, error: true });
+      throw error;
+    }
+  }
+
+  // Record component render metrics
+  recordComponentRender(componentName: string, renderTime: number) {
+    const existing = this.componentMetrics.get(componentName);
+    if (existing) {
+      existing.renderTime = renderTime;
+      existing.renderCount++;
+      existing.lastRender = Date.now();
+    } else {
+      this.componentMetrics.set(componentName, {
+        componentName,
+        renderTime,
+        renderCount: 1,
+        lastRender: Date.now()
+      });
+    }
+
+    this.recordMetric('component_render', renderTime, { componentName });
+  }
+
+  // Get performance summary
+  getPerformanceSummary(): {
+    totalMetrics: number;
+    averageApiTime: number;
+    slowestOperations: PerformanceMetric[];
+    componentStats: ComponentMetric[];
+    memoryUsage?: MemoryInfo;
+  } {
+    const apiMetrics = this.metrics.filter(m => m.name === 'api_call');
+    const averageApiTime = apiMetrics.length > 0 
+      ? apiMetrics.reduce((sum, m) => sum + m.value, 0) / apiMetrics.length 
+      : 0;
+
+    const slowestOperations = [...this.metrics]
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 10);
+
+    const componentStats = Array.from(this.componentMetrics.values())
+      .sort((a, b) => b.renderTime - a.renderTime);
+
+    const summary = {
+      totalMetrics: this.metrics.length,
+      averageApiTime,
+      slowestOperations,
+      componentStats,
+      memoryUsage: this.getMemoryUsage()
+    };
+
+    return summary;
+  }
+
+  // Get memory usage (if available)
+  private getMemoryUsage(): MemoryInfo | undefined {
+    if (typeof window !== 'undefined' && 'memory' in performance) {
+      return (performance as any).memory;
+    }
+    return undefined;
+  }
+
+  // Get metrics by name
+  getMetricsByName(name: string, limit = 100): PerformanceMetric[] {
+    return this.metrics
+      .filter(m => m.name === name)
+      .slice(-limit);
+  }
+
+  // Clear all metrics
+  clearMetrics() {
+    this.metrics = [];
+    this.componentMetrics.clear();
+  }
+
+  // Get real-time performance stats
+  getRealTimeStats(): {
+    fps: number;
+    memoryUsage: number;
+    activeConnections: number;
+    lastUpdate: number;
+  } {
+    const memoryInfo = this.getMemoryUsage();
+    
+    return {
+      fps: this.calculateFPS(),
+      memoryUsage: memoryInfo ? memoryInfo.usedJSHeapSize / 1024 / 1024 : 0, // MB
+      activeConnections: this.getActiveConnectionCount(),
+      lastUpdate: Date.now()
+    };
+  }
+
+  // Calculate approximate FPS
+  private calculateFPS(): number {
+    const renderMetrics = this.metrics
+      .filter(m => m.name === 'component_render')
+      .slice(-60); // Last 60 renders
+
+    if (renderMetrics.length < 2) return 0;
+
+    const timeSpan = renderMetrics[renderMetrics.length - 1].timestamp - renderMetrics[0].timestamp;
+    return Math.round((renderMetrics.length / timeSpan) * 1000);
+  }
+
+  // Get active connection count (WebSocket, etc.)
+  private getActiveConnectionCount(): number {
+    // This would be implemented based on your connection management
+    return 0;
+  }
+
+  // Cleanup observers
+  cleanup() {
+    this.observers.forEach(observer => observer.disconnect());
+    this.observers.clear();
   }
 }
 
-// React performance hooks
+// Create singleton instance
+export const performanceMonitor = new PerformanceMonitor();
+
+// React hook for component performance monitoring
 export const usePerformanceMonitor = (componentName: string) => {
-  React.useEffect(() => {
-    const endMeasure = PerformanceMonitor.startMeasure(componentName);
-    return endMeasure;
-  });
+  const startTime = performance.now();
+
+  return {
+    recordRender: () => {
+      const renderTime = performance.now() - startTime;
+      performanceMonitor.recordComponentRender(componentName, renderTime);
+    }
+  };
 };
 
-export const useMemoryCleanup = (cleanupFn: () => void) => {
-  React.useEffect(() => {
-    return () => {
-      cleanupFn();
+// Decorator for timing functions
+export const timed = (name: string, metadata?: Record<string, any>) => {
+  return function (target: any, propertyKey: string, descriptor: PropertyDescriptor) {
+    const originalMethod = descriptor.value;
+
+    descriptor.value = async function (...args: any[]) {
+      return performanceMonitor.timeFunction(
+        name || `${target.constructor.name}.${propertyKey}`,
+        () => originalMethod.apply(this, args),
+        metadata
+      );
     };
-  }, [cleanupFn]);
+
+    return descriptor;
+  };
+};
+
+// Memory leak detection
+export class MemoryLeakDetector {
+  private snapshots: Map<string, number> = new Map();
+  private thresholds = {
+    components: 1000,
+    eventListeners: 500,
+    timers: 100
+  };
+
+  takeSnapshot(label: string) {
+    if (typeof window === 'undefined') return;
+
+    const memoryInfo = (performance as any).memory;
+    if (memoryInfo) {
+      this.snapshots.set(label, memoryInfo.usedJSHeapSize);
+    }
+  }
+
+  compareSnapshots(before: string, after: string): number {
+    const beforeSize = this.snapshots.get(before) || 0;
+    const afterSize = this.snapshots.get(after) || 0;
+    return afterSize - beforeSize;
+  }
+
+  detectLeaks(): string[] {
+    const warnings: string[] = [];
+
+    // Check for excessive DOM nodes
+    if (typeof document !== 'undefined') {
+      const nodeCount = document.querySelectorAll('*').length;
+      if (nodeCount > this.thresholds.components) {
+        warnings.push(`High DOM node count: ${nodeCount}`);
+      }
+    }
+
+    // Check memory growth
+    const snapshots = Array.from(this.snapshots.entries());
+    if (snapshots.length >= 2) {
+      const growth = snapshots[snapshots.length - 1][1] - snapshots[0][1];
+      if (growth > 50 * 1024 * 1024) { // 50MB growth
+        warnings.push(`High memory growth: ${Math.round(growth / 1024 / 1024)}MB`);
+      }
+    }
+
+    return warnings;
+  }
+}
+
+export const memoryLeakDetector = new MemoryLeakDetector();
+
+// Bundle size analyzer
+export const analyzeBundleSize = () => {
+  if (typeof window === 'undefined') return null;
+
+  const scripts = Array.from(document.querySelectorAll('script[src]'));
+  const styles = Array.from(document.querySelectorAll('link[rel="stylesheet"]'));
+
+  return {
+    scriptCount: scripts.length,
+    styleCount: styles.length,
+    totalResources: scripts.length + styles.length,
+    scripts: scripts.map(s => (s as HTMLScriptElement).src),
+    styles: styles.map(s => (s as HTMLLinkElement).href)
+  };
 };
 
 // Performance optimization recommendations
-export const getPerformanceRecommendations = (): string[] => {
+export const getOptimizationRecommendations = (): string[] => {
   const recommendations: string[] = [];
-  const metrics = PerformanceMonitor.getMetrics();
-  const memoryStats = MemoryManager.getMemoryStats();
-  const queueStats = NetworkOptimizer.getQueueStats();
+  const summary = performanceMonitor.getPerformanceSummary();
 
-  // Check for slow components
-  Object.entries(metrics).forEach(([component, metric]) => {
-    if (metric.averageRenderTime > 50) {
-      recommendations.push(`Consider optimizing ${component} - average render time: ${metric.averageRenderTime}ms`);
-    }
-  });
-
-  // Check memory usage
-  if (memoryStats.observers > 10) {
-    recommendations.push(`High number of intersection observers (${memoryStats.observers}) - consider cleanup`);
+  if (summary.averageApiTime > 1000) {
+    recommendations.push("Consider implementing API response caching");
   }
 
-  if (memoryStats.timeouts > 20) {
-    recommendations.push(`High number of active timeouts (${memoryStats.timeouts}) - consider cleanup`);
+  if (summary.componentStats.some(c => c.renderTime > 16)) {
+    recommendations.push("Some components are rendering slowly - consider React.memo or useMemo");
   }
 
-  // Check network queue
-  if (queueStats.queueLength > 10) {
-    recommendations.push(`High network request queue (${queueStats.queueLength}) - consider request batching`);
+  const memoryWarnings = memoryLeakDetector.detectLeaks();
+  recommendations.push(...memoryWarnings.map(w => `Memory issue: ${w}`));
+
+  if (summary.slowestOperations.some(op => op.name === 'longtask' && op.value > 50)) {
+    recommendations.push("Long tasks detected - consider breaking up heavy computations");
   }
 
   return recommendations;
 };
 
-// Global performance monitoring setup
-if (typeof window !== 'undefined') {
-  // Monitor page load performance
-  window.addEventListener('load', () => {
-    const navigation = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming;
-    console.log('Page load performance:', {
-      domContentLoaded: navigation.domContentLoadedEventEnd - navigation.domContentLoadedEventStart,
-      loadComplete: navigation.loadEventEnd - navigation.loadEventStart,
-      totalTime: navigation.loadEventEnd - navigation.fetchStart
-    });
-  });
-
-  // Monitor memory usage
-  if ('memory' in performance) {
-    setInterval(() => {
-      const memory = (performance as any).memory;
-      if (memory.usedJSHeapSize > memory.jsHeapSizeLimit * 0.9) {
-        console.warn('High memory usage detected:', {
-          used: Math.round(memory.usedJSHeapSize / 1024 / 1024),
-          limit: Math.round(memory.jsHeapSizeLimit / 1024 / 1024)
-        });
-      }
-    }, 30000); // Check every 30 seconds
-  }
-}
+export default {
+  performanceMonitor,
+  usePerformanceMonitor,
+  timed,
+  memoryLeakDetector,
+  analyzeBundleSize,
+  getOptimizationRecommendations
+};

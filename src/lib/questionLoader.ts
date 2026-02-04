@@ -84,9 +84,79 @@ export interface Round3Data {
 export class QuestionLoader {
   private static cache: Map<string, any> = new Map();
 
-  // Load Round 1 questions
-  static async loadRound1Questions(): Promise<Round1Data> {
-    const cacheKey = 'round1_questions';
+  // Shuffle array using Fisher-Yates algorithm
+  private static shuffleArray<T>(array: T[]): T[] {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  }
+
+  // Generate a deterministic seed based on team ID or session
+  private static generateSeed(teamId?: string): number {
+    if (teamId) {
+      // Use team ID to generate consistent seed for the team
+      let hash = 0;
+      for (let i = 0; i < teamId.length; i++) {
+        const char = teamId.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32-bit integer
+      }
+      return Math.abs(hash);
+    }
+    // Fallback to date-based seed for consistent daily shuffle
+    const today = new Date().toDateString();
+    let hash = 0;
+    for (let i = 0; i < today.length; i++) {
+      const char = today.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    return Math.abs(hash);
+  }
+
+  // Seeded random number generator
+  private static seededRandom(seed: number): () => number {
+    let currentSeed = seed;
+    return function() {
+      currentSeed = (currentSeed * 9301 + 49297) % 233280;
+      return currentSeed / 233280;
+    };
+  }
+
+  // Shuffle array with deterministic seed
+  private static shuffleArrayWithSeed<T>(array: T[], seed: number): T[] {
+    const shuffled = [...array];
+    const random = this.seededRandom(seed);
+    
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  }
+
+  // Select random questions with deterministic seed
+  private static selectRandomQuestions<T>(array: T[], count: number, seed: number): T[] {
+    if (count >= array.length) {
+      return [...array]; // Return all questions if count is greater than available
+    }
+
+    const shuffled = this.shuffleArrayWithSeed(array, seed);
+    return shuffled.slice(0, count);
+  }
+
+  // Load Round 1 questions with optional shuffling and random selection
+  static async loadRound1Questions(options?: { 
+    shuffle?: boolean; 
+    teamId?: string; 
+    shuffleOptions?: boolean;
+    selectCount?: number; // Number of questions to randomly select
+  }): Promise<Round1Data> {
+    const { shuffle = false, teamId, shuffleOptions = false, selectCount } = options || {};
+    const cacheKey = `round1_questions_${shuffle ? 'shuffled' : 'original'}_${teamId || 'default'}_${shuffleOptions ? 'shuffled_options' : 'original_options'}_${selectCount || 'all'}`;
     
     if (this.cache.has(cacheKey)) {
       return this.cache.get(cacheKey);
@@ -101,6 +171,41 @@ export class QuestionLoader {
       const data: Round1Data = await response.json();
       this.validateRound1Data(data);
       
+      // Apply random selection if requested
+      if (selectCount && selectCount < data.questions.length) {
+        const seed = this.generateSeed(teamId);
+        data.questions = this.selectRandomQuestions(data.questions, selectCount, seed);
+        
+        // Update round info to reflect selected count
+        data.round_info.total_questions = selectCount;
+      }
+      
+      // Apply shuffling if requested
+      if (shuffle || shuffleOptions) {
+        const seed = this.generateSeed(teamId);
+        
+        // Shuffle questions order
+        if (shuffle) {
+          data.questions = this.shuffleArrayWithSeed(data.questions, seed);
+        }
+        
+        // Shuffle options within each question
+        if (shuffleOptions) {
+          data.questions = data.questions.map((question, index) => {
+            const questionSeed = seed + index; // Different seed for each question
+            const originalCorrectAnswer = question.options[question.correct_answer];
+            const shuffledOptions = this.shuffleArrayWithSeed(question.options, questionSeed);
+            const newCorrectIndex = shuffledOptions.indexOf(originalCorrectAnswer);
+            
+            return {
+              ...question,
+              options: shuffledOptions,
+              correct_answer: newCorrectIndex
+            };
+          });
+        }
+      }
+      
       this.cache.set(cacheKey, data);
       return data;
     } catch (error) {
@@ -109,9 +214,13 @@ export class QuestionLoader {
     }
   }
 
-  // Load Round 2 questions
-  static async loadRound2Questions(): Promise<Round2Data> {
-    const cacheKey = 'round2_questions';
+  // Load Round 2 questions with optional shuffling
+  static async loadRound2Questions(options?: { 
+    shuffle?: boolean; 
+    teamId?: string 
+  }): Promise<Round2Data> {
+    const { shuffle = false, teamId } = options || {};
+    const cacheKey = `round2_questions_${shuffle ? 'shuffled' : 'original'}_${teamId || 'default'}`;
     
     if (this.cache.has(cacheKey)) {
       return this.cache.get(cacheKey);
@@ -125,6 +234,12 @@ export class QuestionLoader {
       
       const data: Round2Data = await response.json();
       this.validateRound2Data(data);
+      
+      // Apply shuffling if requested
+      if (shuffle) {
+        const seed = this.generateSeed(teamId);
+        data.questions = this.shuffleArrayWithSeed(data.questions, seed);
+      }
       
       this.cache.set(cacheKey, data);
       return data;
@@ -218,8 +333,8 @@ export class QuestionLoader {
     }
 
     const categoryNames = Object.keys(data.categories);
-    if (categoryNames.length !== 7) {
-      throw new Error('Round 3 must have exactly 7 categories for 7x5 grid');
+    if (categoryNames.length !== 6) {
+      throw new Error('Round 3 must have exactly 6 categories for 6x6 grid');
     }
 
     categoryNames.forEach(categoryKey => {
@@ -253,13 +368,21 @@ export class QuestionLoader {
     };
   }
 
-  // Get questions for a specific round
-  static async getQuestionsForRound(roundNumber: number): Promise<Round1Data | Round2Data | Round3Data> {
+  // Get questions for a specific round with shuffling options
+  static async getQuestionsForRound(
+    roundNumber: number, 
+    options?: { 
+      shuffle?: boolean; 
+      teamId?: string; 
+      shuffleOptions?: boolean;
+      selectCount?: number;
+    }
+  ): Promise<Round1Data | Round2Data | Round3Data> {
     switch (roundNumber) {
       case 1:
-        return this.loadRound1Questions();
+        return this.loadRound1Questions(options);
       case 2:
-        return this.loadRound2Questions();
+        return this.loadRound2Questions(options);
       case 3:
         return this.loadRound3Questions();
       default:
@@ -267,17 +390,17 @@ export class QuestionLoader {
     }
   }
 
-  // Convert Round 3 data to grid format for Jeopardy component
+  // Convert Round 3 data to grid format for Jeopardy component (6x6 grid)
   static convertRound3ToGrid(data: Round3Data): Array<Array<JeopardyQuestion & { category: string }>> {
     const categories = Object.keys(data.categories);
     const grid: Array<Array<JeopardyQuestion & { category: string }>> = [];
 
-    // Create 5 rows (difficulty levels)
-    for (let row = 0; row < 5; row++) {
+    // Create 6 rows (difficulty levels)
+    for (let row = 0; row < 6; row++) {
       const gridRow: Array<JeopardyQuestion & { category: string }> = [];
       
-      // Create 7 columns (categories)
-      for (let col = 0; col < 7; col++) {
+      // Create 6 columns (categories)
+      for (let col = 0; col < 6; col++) {
         const categoryKey = categories[col];
         const category = data.categories[categoryKey];
         const question = category.questions[row];
@@ -285,6 +408,8 @@ export class QuestionLoader {
         gridRow.push({
           ...question,
           category: categoryKey,
+          jeopardy_row: row,
+          jeopardy_col: col
         });
       }
       

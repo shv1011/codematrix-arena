@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug User Creation</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            font-family: monospace;
+            max-width: 900px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #00ff00;
+        }
+        .container {
+            background: #2a2a2a;
+            padding: 30px;
+            border-radius: 8px;
+            border: 1px solid #00ff00;
+        }
+        h1 { color: #00ff00; text-align: center; }
+        .test-result {
+            margin: 10px 0;
+            padding: 10px;
+            border-left: 4px solid #00ff00;
+            background: #333;
+        }
+        .error {
+            border-left-color: #ff0000;
+            color: #ff6666;
+        }
+        .success {
+            border-left-color: #00ff00;
+            color: #66ff66;
+        }
+        .warning {
+            border-left-color: #ffff00;
+            color: #ffff66;
+        }
+        button {
+            background: #333;
+            color: #00ff00;
+            border: 1px solid #00ff00;
+            padding: 10px 20px;
+            margin: 10px 5px;
+            cursor: pointer;
+            font-family: monospace;
+        }
+        button:hover {
+            background: #00ff00;
+            color: #000;
+        }
+        .sql-block {
+            background: #1a1a1a;
+            border: 1px solid #444;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            font-size: 12px;
+        }
+        input {
+            background: #333;
+            color: #00ff00;
+            border: 1px solid #00ff00;
+            padding: 8px;
+            margin: 5px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Debug User Creation & Login</h1>
+        
+        <div>
+            <h3>Step 1: Check Supabase Connection</h3>
+            <button onclick="testConnection()">Test Connection</button>
+            <div id="connectionResult"></div>
+        </div>
+
+        <div>
+            <h3>Step 2: Check if User Exists</h3>
+            <input type="email" id="checkEmail" placeholder="testwarriors@codewars.com" value="testwarriors@codewars.com">
+            <button onclick="checkUserExists()">Check User</button>
+            <div id="userCheckResult"></div>
+        </div>
+
+        <div>
+            <h3>Step 3: Test Login</h3>
+            <input type="email" id="loginEmail" placeholder="testwarriors@codewars.com" value="testwarriors@codewars.com">
+            <input type="password" id="loginPassword" placeholder="warriors123" value="warriors123">
+            <button onclick="testLogin()">Test Login</button>
+            <div id="loginResult"></div>
+        </div>
+
+        <div>
+            <h3>Step 4: Generate Working SQL</h3>
+            <button onclick="generateWorkingSQL()">Generate Fixed SQL</button>
+            <div id="sqlResult"></div>
+        </div>
+
+        <div>
+            <h3>Step 5: Manual User Creation (Supabase Dashboard)</h3>
+            <button onclick="showManualSteps()">Show Manual Steps</button>
+            <div id="manualSteps"></div>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = "https://wscdzjtwaxunorfmpuzl.supabase.co";
+        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndzY2R6anR3YXh1bm9yZm1wdXpsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk2NTU1NDQsImV4cCI6MjA4NTIzMTU0NH0.0zDOMWXle1bwyM5LJpgh3PdEQq1n7E-mmL8adMZiWlc";
+
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        
+        function log(message, type = 'info', containerId = 'results') {
+            const container = document.getElementById(containerId);
+            if (container) {
+                const div = document.createElement('div');
+                div.className = `test-result ${type}`;
+                div.innerHTML = `<strong>[${new Date().toLocaleTimeString()}]</strong> ${message}`;
+                container.appendChild(div);
+                container.scrollTop = container.scrollHeight;
+            }
+        }
+
+        async function testConnection() {
+            const container = document.getElementById('connectionResult');
+            container.innerHTML = '';
+            
+            log('🔍 Testing Supabase connection...', 'info', 'connectionResult');
+            
+            try {
+                // Test basic connection
+                const response = await fetch(SUPABASE_URL + '/rest/v1/', {
+                    headers: {
+                        'apikey': SUPABASE_KEY,
+                        'Authorization': `Bearer ${SUPABASE_KEY}`
+                    }
+                });
+                
+                if (response.ok) {
+                    log('✅ Supabase REST API connection successful', 'success', 'connectionResult');
+                } else {
+                    log(`❌ REST API connection failed: ${response.status}`, 'error', 'connectionResult');
+                }
+                
+                // Test auth endpoint specifically
+                const authResponse = await fetch(SUPABASE_URL + '/auth/v1/settings', {
+                    headers: {
+                        'apikey': SUPABASE_KEY,
+                        'Authorization': `Bearer ${SUPABASE_KEY}`
+                    }
+                });
+                
+                if (authResponse.ok) {
+                    log('✅ Auth endpoint accessible', 'success', 'connectionResult');
+                } else {
+                    log(`❌ Auth endpoint failed: ${authResponse.status}`, 'error', 'connectionResult');
+                }
+                
+            } catch (error) {
+                log(`❌ Connection test failed: ${error.message}`, 'error', 'connectionResult');
+            }
+        }
+
+        async function checkUserExists() {
+            const email = document.getElementById('checkEmail').value;
+            const container = document.getElementById('userCheckResult');
+            container.innerHTML = '';
+            
+            log(`🔍 Checking if user exists: ${email}`, 'info', 'userCheckResult');
+            
+            try {
+                // Check in teams table
+                const { data: teamData, error: teamError } = await supabase
+                    .from('teams')
+                    .select('*')
+                    .eq('leader_email', email);
+                
+                if (teamError) {
+                    log(`❌ Error checking teams: ${teamError.message}`, 'error', 'userCheckResult');
+                } else if (teamData && teamData.length > 0) {
+                    log(`✅ Team record found: ${teamData[0].team_name} (${teamData[0].team_code})`, 'success', 'userCheckResult');
+                } else {
+                    log(`❌ No team record found for ${email}`, 'error', 'userCheckResult');
+                }
+                
+                // Check user roles
+                const { data: userData, error: userError } = await supabase
+                    .from('user_roles')
+                    .select('*')
+                    .eq('user_id', '(SELECT id FROM auth.users WHERE email = \'' + email + '\')');
+                
+                if (userError) {
+                    log(`⚠️ Could not check user roles: ${userError.message}`, 'warning', 'userCheckResult');
+                } else if (userData && userData.length > 0) {
+                    log(`✅ User role found: ${userData[0].role}`, 'success', 'userCheckResult');
+                } else {
+                    log(`❌ No user role found`, 'error', 'userCheckResult');
+                }
+                
+            } catch (error) {
+                log(`❌ Check failed: ${error.message}`, 'error', 'userCheckResult');
+            }
+        }
+
+        async function testLogin() {
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            const container = document.getElementById('loginResult');
+            container.innerHTML = '';
+            
+            log(`🔐 Testing login: ${email}`, 'info', 'loginResult');
+            
+            try {
+                const { data, error } = await supabase.auth.signInWithPassword({
+                    email: email,
+                    password: password
+                });
+                
+                if (error) {
+                    log(`❌ Login failed: ${error.message}`, 'error', 'loginResult');
+                    log(`Error code: ${error.status || 'unknown'}`, 'error', 'loginResult');
+                    
+                    if (error.message.includes('Invalid login credentials')) {
+                        log(`💡 This usually means the user account doesn't exist in auth.users`, 'warning', 'loginResult');
+                    }
+                } else {
+                    log(`✅ Login successful!`, 'success', 'loginResult');
+                    log(`User ID: ${data.user.id}`, 'success', 'loginResult');
+                    log(`Email: ${data.user.email}`, 'success', 'loginResult');
+                    
+                    // Sign out immediately
+                    await supabase.auth.signOut();
+                    log(`🔓 Signed out for testing`, 'info', 'loginResult');
+                }
+                
+            } catch (error) {
+                log(`❌ Login test failed: ${error.message}`, 'error', 'loginResult');
+            }
+        }
+
+        function generateWorkingSQL() {
+            const container = document.getElementById('sqlResult');
+            
+            const workingSQL = `-- Working SQL for User Creation (Manual Method)
+-- Run this in Supabase SQL Editor
+
+-- First, create the team record
+INSERT INTO public.teams (
+    team_name,
+    team_code,
+    leader_email,
+    password_hash,
+    is_active,
+    is_disqualified,
+    current_round,
+    total_score,
+    round1_score,
+    round2_score,
+    round3_score
+) VALUES (
+    'Test Warriors',
+    'TESWAR01',
+    'testwarriors@codewars.com',
+    'simple:a1b2c3d4',
+    true,
+    false,
+    0,
+    0,
+    0,
+    0,
+    0
+) ON CONFLICT (team_code) DO NOTHING;
+
+-- Check if team was created
+SELECT 'Team created' as status, team_name, team_code, leader_email 
+FROM public.teams 
+WHERE team_code = 'TESWAR01';`;
+
+            container.innerHTML = `
+                <div class="test-result success">
+                    <strong>📝 Step 1: Run this SQL first</strong>
+                    <div class="sql-block">${workingSQL}</div>
+                </div>
+                <div class="test-result warning">
+                    <strong>📝 Step 2: Create user manually in Supabase Dashboard</strong>
+                    <p>1. Go to Supabase Dashboard → Authentication → Users</p>
+                    <p>2. Click "Add user"</p>
+                    <p>3. Email: testwarriors@codewars.com</p>
+                    <p>4. Password: warriors123</p>
+                    <p>5. ✅ Check "Auto Confirm User"</p>
+                    <p>6. Click "Create user"</p>
+                </div>
+                <div class="test-result info">
+                    <strong>📝 Step 3: Run role assignment SQL</strong>
+                    <div class="sql-block">-- Assign user role (run after creating user)
+INSERT INTO public.user_roles (user_id, role)
+SELECT id, 'user'::app_role
+FROM auth.users 
+WHERE email = 'testwarriors@codewars.com'
+ON CONFLICT (user_id, role) DO NOTHING;</div>
+                </div>
+            `;
+        }
+
+        function showManualSteps() {
+            const container = document.getElementById('manualSteps');
+            
+            container.innerHTML = `
+                <div class="test-result success">
+                    <strong>🛠️ Manual User Creation Steps</strong>
+                    <p><strong>This is the most reliable method:</strong></p>
+                    <ol>
+                        <li><strong>Create Team Record:</strong> Run the SQL from Step 4 above</li>
+                        <li><strong>Create User Account:</strong>
+                            <ul>
+                                <li>Go to <a href="https://supabase.com/dashboard" target="_blank" style="color: #66ff66;">Supabase Dashboard</a></li>
+                                <li>Select project: wscdzjtwaxunorfmpuzl</li>
+                                <li>Authentication → Users → Add user</li>
+                                <li>Email: testwarriors@codewars.com</li>
+                                <li>Password: warriors123</li>
+                                <li>✅ <strong>IMPORTANT:</strong> Check "Auto Confirm User"</li>
+                                <li>Click "Create user"</li>
+                            </ul>
+                        </li>
+                        <li><strong>Assign Role:</strong> Run the role assignment SQL</li>
+                        <li><strong>Test Login:</strong> Use the test login button above</li>
+                    </ol>
+                </div>
+                <div class="test-result warning">
+                    <strong>⚠️ Why SQL user creation might fail:</strong>
+                    <ul>
+                        <li>Different Supabase versions have different auth.users schemas</li>
+                        <li>Some columns might not exist or be required</li>
+                        <li>Manual creation through dashboard is more reliable</li>
+                        <li>Dashboard handles all the required fields automatically</li>
+                    </ul>
+                </div>
+            `;
+        }
+
+        // Auto-run connection test on load
+        window.addEventListener('load', () => {
+            testConnection();
+        });
+    </script>
+</body>
+</html>

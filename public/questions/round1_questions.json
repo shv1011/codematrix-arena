@@ -4,19 +4,14 @@
     "round_name": "Aptitude Arena",
     "round_type": "quiz",
     "time_limit_seconds": 1800,
-    "total_questions": 20,
-    "description": "Multiple choice questions covering programming concepts, data structures, algorithms, and computer science fundamentals."
+    "total_questions": 61,
+    "description": "Multiple choice questions covering programming concepts, data structures, algorithms, and computer science fundamentals. 45 questions will be randomly selected for each team."
   },
   "questions": [
     {
       "id": 1,
       "question": "What is the time complexity of binary search in a sorted array?",
-      "options": [
-        "O(n)",
-        "O(log n)",
-        "O(n²)",
-        "O(1)"
-      ],
+      "options": ["O(n)", "O(log n)", "O(n²)", "O(1)"],
       "correct_answer": 1,
       "points": 10,
       "category": "Algorithms",
@@ -26,12 +21,7 @@
     {
       "id": 2,
       "question": "Which data structure follows the Last In First Out (LIFO) principle?",
-      "options": [
-        "Queue",
-        "Stack",
-        "Array",
-        "Linked List"
-      ],
+      "options": ["Queue", "Stack", "Array", "Linked List"],
       "correct_answer": 1,
       "points": 10,
       "category": "Data Structures",
@@ -41,14 +31,9 @@
     {
       "id": 3,
       "question": "What is the worst-case time complexity of QuickSort?",
-      "options": [
-        "O(n log n)",
-        "O(n²)",
-        "O(n)",
-        "O(log n)"
-      ],
+      "options": ["O(n log n)", "O(n²)", "O(n)", "O(log n)"],
       "correct_answer": 1,
-      "points": 15,
+      "points": 10,
       "category": "Algorithms",
       "difficulty": "medium",
       "explanation": "QuickSort has O(n²) worst-case complexity when the pivot is always the smallest or largest element."
@@ -56,14 +41,9 @@
     {
       "id": 4,
       "question": "In object-oriented programming, what does polymorphism allow?",
-      "options": [
-        "Creating multiple classes",
-        "Objects of different types to be treated as objects of a common base type",
-        "Hiding implementation details",
-        "Creating objects without classes"
-      ],
+      "options": ["Creating multiple classes", "Objects of different types to be treated as objects of a common base type", "Hiding implementation details", "Creating objects without classes"],
       "correct_answer": 1,
-      "points": 15,
+      "points": 10,
       "category": "OOP",
       "difficulty": "medium",
       "explanation": "Polymorphism allows objects of different types to be treated uniformly through a common interface."
@@ -71,17 +51,516 @@
     {
       "id": 5,
       "question": "What is the primary purpose of database normalization?",
-      "options": [
-        "Increase data redundancy",
-        "Reduce data redundancy and improve data integrity",
-        "Make queries slower",
-        "Increase storage space"
-      ],
+      "options": ["Increase data redundancy", "Reduce data redundancy and improve data integrity", "Make queries slower", "Increase storage space"],
       "correct_answer": 1,
-      "points": 15,
+      "points": 10,
       "category": "Database",
       "difficulty": "medium",
       "explanation": "Normalization reduces redundancy and improves data integrity by organizing data efficiently."
+    },
+    {
+      "id": 6,
+      "question": "Which sorting algorithm has the best average-case time complexity?",
+      "options": ["Bubble Sort", "Selection Sort", "Merge Sort", "Insertion Sort"],
+      "correct_answer": 2,
+      "points": 10,
+      "category": "Algorithms",
+      "difficulty": "medium"
+    },
+    {
+      "id": 7,
+      "question": "What does SQL stand for?",
+      "options": ["Structured Query Language", "Simple Query Language", "Standard Query Language", "System Query Language"],
+      "correct_answer": 0,
+      "points": 10,
+      "category": "Database",
+      "difficulty": "easy"
+    },
+    {
+      "id": 8,
+      "question": "Which of the following is NOT a principle of Object-Oriented Programming?",
+      "options": ["Encapsulation", "Inheritance", "Polymorphism", "Compilation"],
+      "correct_answer": 3,
+      "points": 10,
+      "category": "OOP",
+      "difficulty": "medium"
+    },
+    {
+      "id": 9,
+      "question": "What is the space complexity of merge sort?",
+      "options": ["O(1)", "O(log n)", "O(n)", "O(n²)"],
+      "correct_answer": 2,
+      "points": 10,
+      "category": "Algorithms",
+      "difficulty": "medium"
+    },
+    {
+      "id": 10,
+      "question": "In a binary tree, what is the maximum number of nodes at level k?",
+      "options": ["2^k", "2^(k-1)", "2^(k+1)", "k^2"],
+      "correct_answer": 0,
+      "points": 10,
+      "category": "Data Structures",
+      "difficulty": "medium"
+    },
+    {
+      "id": 11,
+      "question": "Which design pattern ensures a class has only one instance?",
+      "options": ["Factory Pattern", "Observer Pattern", "Singleton Pattern", "Strategy Pattern"],
+      "correct_answer": 2,
+      "points": 10,
+      "category": "Design Patterns",
+      "difficulty": "medium"
+    },
+    {
+      "id": 12,
+      "question": "What is the time complexity of inserting an element at the beginning of a linked list?",
+      "options": ["O(1)", "O(log n)", "O(n)", "O(n²)"],
+      "correct_answer": 0,
+      "points": 10,
+      "category": "Data Structures",
+      "difficulty": "easy"
+    },
+    {
+      "id": 13,
+      "question": "Which HTTP method is idempotent?",
+      "options": ["POST", "PUT", "PATCH", "All of the above"],
+      "correct_answer": 1,
+      "points": 10,
+      "category": "Web Development",
+      "difficulty": "medium"
+    },
+    {
+      "id": 14,
+      "question": "What is the main advantage of using indexes in databases?",
+      "options": ["Reduce storage space", "Improve query performance", "Increase data redundancy", "Simplify table structure"],
+      "correct_answer": 1,
+      "points": 10,
+      "category": "Database",
+      "difficulty": "medium"
+    },
+    {
+      "id": 15,
+      "question": "In which data structure is BFS (Breadth-First Search) typically implemented?",
+      "options": ["Stack", "Queue", "Priority Queue", "Hash Table"],
+      "correct_answer": 1,
+      "points": 10,
+      "category": "Algorithms",
+      "difficulty": "medium"
+    },
+    {
+      "id": 16,
+      "question": "What does ACID stand for in database transactions?",
+      "options": ["Atomicity, Consistency, Isolation, Durability", "Accuracy, Consistency, Integrity, Durability", "Atomicity, Concurrency, Isolation, Durability", "Accuracy, Concurrency, Integrity, Durability"],
+      "correct_answer": 0,
+      "points": 10,
+      "category": "Database",
+      "difficulty": "hard"
+    },
+    {
+      "id": 17,
+      "question": "Which algorithm is used to find the shortest path in a weighted graph?",
+      "options": ["DFS", "BFS", "Dijkstra's Algorithm", "Kruskal's Algorithm"],
+      "correct_answer": 2,
+      "points": 10,
+      "category": "Algorithms",
+      "difficulty": "hard"
+    },
+    {
+      "id": 18,
+      "question": "What is the worst-case time complexity of hash table operations?",
+      "options": ["O(1)", "O(log n)", "O(n)", "O(n²)"],
+      "correct_answer": 2,
+      "points": 10,
+      "category": "Data Structures",
+      "difficulty": "hard"
+    },
+    {
+      "id": 19,
+      "question": "Which normal form eliminates transitive dependencies?",
+      "options": ["1NF", "2NF", "3NF", "BCNF"],
+      "correct_answer": 2,
+      "points": 10,
+      "category": "Database",
+      "difficulty": "hard"
+    },
+    {
+      "id": 20,
+      "question": "What is the time complexity of the best comparison-based sorting algorithm?",
+      "options": ["O(n)", "O(n log n)", "O(n²)", "O(log n)"],
+      "correct_answer": 1,
+      "points": 10,
+      "category": "Algorithms",
+      "difficulty": "hard"
+    },
+    {
+      "id": 21,
+      "question": "Which data structure is used to implement recursion?",
+      "options": ["Queue", "Stack", "Array", "Linked List"],
+      "correct_answer": 1,
+      "points": 10,
+      "category": "Data Structures",
+      "difficulty": "easy"
+    },
+    {
+      "id": 22,
+      "question": "What is the purpose of the 'volatile' keyword in Java?",
+      "options": ["Make variable immutable", "Ensure thread-safe access", "Optimize memory usage", "Enable garbage collection"],
+      "correct_answer": 1,
+      "points": 10,
+      "category": "Programming Languages",
+      "difficulty": "hard"
+    },
+    {
+      "id": 23,
+      "question": "Which of the following is a NoSQL database?",
+      "options": ["MySQL", "PostgreSQL", "MongoDB", "Oracle"],
+      "correct_answer": 2,
+      "points": 10,
+      "category": "Database",
+      "difficulty": "easy"
+    },
+    {
+      "id": 24,
+      "question": "What is the time complexity of accessing an element in an array by index?",
+      "options": ["O(1)", "O(log n)", "O(n)", "O(n²)"],
+      "correct_answer": 0,
+      "points": 10,
+      "category": "Data Structures",
+      "difficulty": "easy"
+    },
+    {
+      "id": 25,
+      "question": "Which protocol is used for secure web communication?",
+      "options": ["HTTP", "HTTPS", "FTP", "SMTP"],
+      "correct_answer": 1,
+      "points": 10,
+      "category": "Web Development",
+      "difficulty": "easy"
+    },
+    {
+      "id": 26,
+      "question": "What is the main difference between '==' and '===' in JavaScript?",
+      "options": ["No difference", "=== checks type and value", "== is faster", "=== is deprecated"],
+      "correct_answer": 1,
+      "points": 10,
+      "category": "Programming Languages",
+      "difficulty": "medium"
+    },
+    {
+      "id": 27,
+      "question": "Which data structure allows insertion and deletion at both ends?",
+      "options": ["Stack", "Queue", "Deque", "Array"],
+      "correct_answer": 2,
+      "points": 10,
+      "category": "Data Structures",
+      "difficulty": "medium"
+    },
+    {
+      "id": 28,
+      "question": "What is the purpose of a foreign key in a database?",
+      "options": ["Primary identification", "Establish relationships", "Index optimization", "Data validation"],
+      "correct_answer": 1,
+      "points": 10,
+      "category": "Database",
+      "difficulty": "medium"
+    },
+    {
+      "id": 29,
+      "question": "Which algorithm is used for finding strongly connected components?",
+      "options": ["DFS", "BFS", "Kosaraju's Algorithm", "Prim's Algorithm"],
+      "correct_answer": 2,
+      "points": 10,
+      "category": "Algorithms",
+      "difficulty": "hard"
+    },
+    {
+      "id": 30,
+      "question": "What is the space complexity of a recursive function with depth n?",
+      "options": ["O(1)", "O(log n)", "O(n)", "O(n²)"],
+      "correct_answer": 2,
+      "points": 10,
+      "category": "Algorithms",
+      "difficulty": "medium"
+    },
+    {
+      "id": 31,
+      "question": "Which CSS property is used for responsive design?",
+      "options": ["display", "position", "media-query", "flex"],
+      "correct_answer": 2,
+      "points": 10,
+      "category": "Web Development",
+      "difficulty": "medium"
+    },
+    {
+      "id": 32,
+      "question": "What is the default access modifier in Java?",
+      "options": ["public", "private", "protected", "package-private"],
+      "correct_answer": 3,
+      "points": 10,
+      "category": "Programming Languages",
+      "difficulty": "medium"
+    },
+    {
+      "id": 33,
+      "question": "Which data structure is best for implementing LRU cache?",
+      "options": ["Array", "Linked List", "Hash Map + Doubly Linked List", "Stack"],
+      "correct_answer": 2,
+      "points": 10,
+      "category": "Data Structures",
+      "difficulty": "hard"
+    },
+    {
+      "id": 34,
+      "question": "What is the time complexity of heap sort?",
+      "options": ["O(n)", "O(n log n)", "O(n²)", "O(log n)"],
+      "correct_answer": 1,
+      "points": 10,
+      "category": "Algorithms",
+      "difficulty": "medium"
+    },
+    {
+      "id": 35,
+      "question": "Which HTTP status code indicates 'Not Found'?",
+      "options": ["200", "404", "500", "301"],
+      "correct_answer": 1,
+      "points": 10,
+      "category": "Web Development",
+      "difficulty": "easy"
+    },
+    {
+      "id": 36,
+      "question": "What is the purpose of the 'final' keyword in Java?",
+      "options": ["Make class abstract", "Prevent inheritance/modification", "Enable polymorphism", "Optimize performance"],
+      "correct_answer": 1,
+      "points": 10,
+      "category": "Programming Languages",
+      "difficulty": "medium"
+    },
+    {
+      "id": 37,
+      "question": "Which algorithm is used for minimum spanning tree?",
+      "options": ["Dijkstra's", "Kruskal's", "Floyd-Warshall", "Bellman-Ford"],
+      "correct_answer": 1,
+      "points": 10,
+      "category": "Algorithms",
+      "difficulty": "hard"
+    },
+    {
+      "id": 38,
+      "question": "What is the maximum number of edges in a simple graph with n vertices?",
+      "options": ["n", "n-1", "n(n-1)/2", "n²"],
+      "correct_answer": 2,
+      "points": 10,
+      "category": "Graph Theory",
+      "difficulty": "medium"
+    },
+    {
+      "id": 39,
+      "question": "Which database operation is NOT part of CRUD?",
+      "options": ["Create", "Read", "Update", "Validate"],
+      "correct_answer": 3,
+      "points": 10,
+      "category": "Database",
+      "difficulty": "easy"
+    },
+    {
+      "id": 40,
+      "question": "What is the time complexity of finding an element in a balanced BST?",
+      "options": ["O(1)", "O(log n)", "O(n)", "O(n log n)"],
+      "correct_answer": 1,
+      "points": 10,
+      "category": "Data Structures",
+      "difficulty": "medium"
+    },
+    {
+      "id": 41,
+      "question": "Which JavaScript method is used to add elements to the end of an array?",
+      "options": ["push()", "pop()", "shift()", "unshift()"],
+      "correct_answer": 0,
+      "points": 10,
+      "category": "Programming Languages",
+      "difficulty": "easy"
+    },
+    {
+      "id": 42,
+      "question": "What is the purpose of DNS?",
+      "options": ["Data encryption", "Domain name resolution", "Database normalization", "Dynamic scripting"],
+      "correct_answer": 1,
+      "points": 10,
+      "category": "Networking",
+      "difficulty": "medium"
+    },
+    {
+      "id": 43,
+      "question": "Which design pattern is used to create objects without specifying their exact class?",
+      "options": ["Singleton", "Factory", "Observer", "Strategy"],
+      "correct_answer": 1,
+      "points": 10,
+      "category": "Design Patterns",
+      "difficulty": "medium"
+    },
+    {
+      "id": 44,
+      "question": "What is the worst-case time complexity of insertion sort?",
+      "options": ["O(n)", "O(n log n)", "O(n²)", "O(log n)"],
+      "correct_answer": 2,
+      "points": 10,
+      "category": "Algorithms",
+      "difficulty": "medium"
+    },
+    {
+      "id": 45,
+      "question": "Which data type is used to store true/false values?",
+      "options": ["int", "string", "boolean", "float"],
+      "correct_answer": 2,
+      "points": 10,
+      "category": "Programming Languages",
+      "difficulty": "easy"
+    },
+    {
+      "id": 46,
+      "question": "What is the purpose of a primary key in a database?",
+      "options": ["Sort data", "Unique identification", "Data validation", "Performance optimization"],
+      "correct_answer": 1,
+      "points": 10,
+      "category": "Database",
+      "difficulty": "easy"
+    },
+    {
+      "id": 47,
+      "question": "Which algorithm is used for topological sorting?",
+      "options": ["BFS", "DFS", "Both BFS and DFS", "Dijkstra's"],
+      "correct_answer": 2,
+      "points": 10,
+      "category": "Algorithms",
+      "difficulty": "hard"
+    },
+    {
+      "id": 48,
+      "question": "What is the time complexity of bubble sort in the best case?",
+      "options": ["O(n)", "O(n log n)", "O(n²)", "O(1)"],
+      "correct_answer": 0,
+      "points": 10,
+      "category": "Algorithms",
+      "difficulty": "medium"
+    },
+    {
+      "id": 49,
+      "question": "Which CSS property is used to change text color?",
+      "options": ["background-color", "color", "text-color", "font-color"],
+      "correct_answer": 1,
+      "points": 10,
+      "category": "Web Development",
+      "difficulty": "easy"
+    },
+    {
+      "id": 50,
+      "question": "What is the purpose of the 'static' keyword in programming?",
+      "options": ["Dynamic allocation", "Class-level access", "Instance creation", "Memory optimization"],
+      "correct_answer": 1,
+      "points": 10,
+      "category": "Programming Languages",
+      "difficulty": "medium"
+    },
+    {
+      "id": 51,
+      "question": "Which data structure uses First In First Out (FIFO) principle?",
+      "options": ["Stack", "Queue", "Array", "Tree"],
+      "correct_answer": 1,
+      "points": 10,
+      "category": "Data Structures",
+      "difficulty": "easy"
+    },
+    {
+      "id": 52,
+      "question": "What is the maximum height of a binary tree with n nodes?",
+      "options": ["log n", "n", "n-1", "2n"],
+      "correct_answer": 2,
+      "points": 10,
+      "category": "Data Structures",
+      "difficulty": "medium"
+    },
+    {
+      "id": 53,
+      "question": "Which SQL command is used to retrieve data?",
+      "options": ["INSERT", "UPDATE", "SELECT", "DELETE"],
+      "correct_answer": 2,
+      "points": 10,
+      "category": "Database",
+      "difficulty": "easy"
+    },
+    {
+      "id": 54,
+      "question": "What is the time complexity of linear search?",
+      "options": ["O(1)", "O(log n)", "O(n)", "O(n²)"],
+      "correct_answer": 2,
+      "points": 10,
+      "category": "Algorithms",
+      "difficulty": "easy"
+    },
+    {
+      "id": 55,
+      "question": "Which programming paradigm focuses on objects and classes?",
+      "options": ["Functional", "Procedural", "Object-Oriented", "Logic"],
+      "correct_answer": 2,
+      "points": 10,
+      "category": "Programming Paradigms",
+      "difficulty": "easy"
+    },
+    {
+      "id": 56,
+      "question": "What is the purpose of a hash function?",
+      "options": ["Sorting data", "Mapping data to fixed-size values", "Encrypting data", "Compressing data"],
+      "correct_answer": 1,
+      "points": 10,
+      "category": "Data Structures",
+      "difficulty": "medium"
+    },
+    {
+      "id": 57,
+      "question": "Which algorithm has the best average-case time complexity for sorting?",
+      "options": ["Bubble Sort", "Quick Sort", "Selection Sort", "Insertion Sort"],
+      "correct_answer": 1,
+      "points": 10,
+      "category": "Algorithms",
+      "difficulty": "medium"
+    },
+    {
+      "id": 58,
+      "question": "What does API stand for?",
+      "options": ["Application Programming Interface", "Advanced Programming Interface", "Automated Programming Interface", "Application Process Interface"],
+      "correct_answer": 0,
+      "points": 10,
+      "category": "Software Engineering",
+      "difficulty": "easy"
+    },
+    {
+      "id": 59,
+      "question": "Which data structure is used in implementing function calls?",
+      "options": ["Queue", "Stack", "Array", "Linked List"],
+      "correct_answer": 1,
+      "points": 10,
+      "category": "Data Structures",
+      "difficulty": "medium"
+    },
+    {
+      "id": 60,
+      "question": "What is the time complexity of accessing an element in a hash table (average case)?",
+      "options": ["O(1)", "O(log n)", "O(n)", "O(n²)"],
+      "correct_answer": 0,
+      "points": 10,
+      "category": "Data Structures",
+      "difficulty": "medium"
+    },
+    {
+      "id": 61,
+      "question": "Which design pattern allows an object to alter its behavior when its internal state changes?",
+      "options": ["Strategy", "State", "Observer", "Command"],
+      "correct_answer": 1,
+      "points": 10,
+      "category": "Design Patterns",
+      "difficulty": "hard"
     }
   ]
 }

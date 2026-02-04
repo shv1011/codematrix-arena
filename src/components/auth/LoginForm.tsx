@@ -5,17 +5,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "./AuthContext";
-import { LogIn, UserPlus, Terminal, AlertCircle } from "lucide-react";
+import { LogIn, Terminal, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 
 export const LoginForm = () => {
-  const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  const { signIn, signUp } = useAuth();
+  const { signIn } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -24,15 +23,13 @@ export const LoginForm = () => {
     setError(null);
 
     try {
-      const result = isLogin 
-        ? await signIn(email, password)
-        : await signUp(email, password);
+      const result = await signIn(email, password);
 
       if (result.error) {
         setError(result.error.message);
         toast.error(result.error.message);
       } else {
-        toast.success(isLogin ? "Welcome back!" : "Account created successfully!");
+        toast.success("Welcome back!");
         navigate("/dashboard");
       }
     } catch (err) {
@@ -57,13 +54,9 @@ export const LoginForm = () => {
               CODE<span className="text-primary">WARS</span>
             </span>
           </div>
-          <CardTitle className="text-2xl">
-            {isLogin ? "ACCESS TERMINAL" : "CREATE ACCOUNT"}
-          </CardTitle>
+          <CardTitle className="text-2xl">ACCESS TERMINAL</CardTitle>
           <CardDescription>
-            {isLogin 
-              ? "Enter your credentials to access the arena" 
-              : "Register to join the competition"}
+            Enter your credentials to access the arena
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -85,7 +78,7 @@ export const LoginForm = () => {
               </label>
               <Input
                 type="email"
-                placeholder="hacker@codewars.io"
+                placeholder="team@codewars.io"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -122,30 +115,13 @@ export const LoginForm = () => {
                   </motion.span>
                   Processing...
                 </span>
-              ) : isLogin ? (
+              ) : (
                 <>
                   <LogIn className="w-4 h-4" />
                   Login
                 </>
-              ) : (
-                <>
-                  <UserPlus className="w-4 h-4" />
-                  Register
-                </>
               )}
             </Button>
-
-            <div className="text-center">
-              <button
-                type="button"
-                onClick={() => setIsLogin(!isLogin)}
-                className="text-sm text-muted-foreground hover:text-primary transition-colors font-mono"
-              >
-                {isLogin 
-                  ? "Need an account? Register here" 
-                  : "Already have an account? Login"}
-              </button>
-            </div>
           </form>
         </CardContent>
       </Card>

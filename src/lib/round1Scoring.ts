@@ -1,7 +1,8 @@
-// Round 1 scoring and evaluation system
+// Round 1 scoring and evaluation system with AI integration
 
 import { supabase } from "@/integrations/supabase/client";
 import { QuestionLoader, Round1Question } from "./questionLoader";
+import { aiEvaluationService, EvaluationRequest } from "./aiEvaluation";
 
 export interface Round1Submission {
   team_id: string;
@@ -38,15 +39,58 @@ export class Round1Scoring {
     return totalScore;
   }
 
-  // Evaluate a single answer
-  static evaluateAnswer(question: Round1Question, answerIndex: number): {
+  // Evaluate a single answer using AI
+  static async evaluateAnswer(
+    teamId: string,
+    question: Round1Question, 
+    answerIndex: number
+  ): Promise<{
     isCorrect: boolean;
     pointsEarned: number;
-  } {
-    const isCorrect = answerIndex === question.correct_answer;
-    const pointsEarned = isCorrect ? question.points : 0;
-    
-    return { isCorrect, pointsEarned };
+    aiResponse?: any;
+  }> {
+    try {
+      // For MCQ, we can still use traditional evaluation as backup
+      const traditionalResult = answerIndex === question.correct_answer;
+      
+      // Prepare AI evaluation request
+      const evaluationRequest: EvaluationRequest = {
+        question: question.question,
+        constraints: [], // No constraints for MCQ
+        userCode: `Selected answer: ${question.options[answerIndex]}`,
+        testCases: [{
+          input: question.question,
+          expected_output: question.options[question.correct_answer]
+        }],
+        evaluationCriteria: "Determine if the selected multiple choice answer is correct"
+      };
+
+      // Use AI evaluation
+      const aiResult = await aiEvaluationService.evaluateSubmission(
+        teamId,
+        `round1_q${question.id}`,
+        1,
+        evaluationRequest
+      );
+
+      // For Round 1, each correct answer = 10 points
+      const pointsEarned = aiResult.isCorrect ? 10 : 0;
+      
+      return { 
+        isCorrect: aiResult.isCorrect, 
+        pointsEarned,
+        aiResponse: aiResult
+      };
+
+    } catch (error) {
+      console.error("AI evaluation failed, using traditional method:", error);
+      
+      // Fallback to traditional evaluation
+      const isCorrect = answerIndex === question.correct_answer;
+      const pointsEarned = isCorrect ? 10 : 0;
+      
+      return { isCorrect, pointsEarned };
+    }
   }
 
   // Get Round 1 leaderboard

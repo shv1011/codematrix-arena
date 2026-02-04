@@ -10,11 +10,6 @@ interface Config {
     openaiApiKey: string;
     geminiApiKey: string;
   };
-  email: {
-    serviceKey: string;
-    fromAddress: string;
-    fromName: string;
-  };
   competition: {
     round1TimeLimit: number;
     round2TimeLimit: number;
@@ -53,11 +48,6 @@ export const config: Config = {
     openaiApiKey: getEnvVar('VITE_OPENAI_API_KEY', false),
     geminiApiKey: getEnvVar('VITE_GEMINI_API_KEY', false),
   },
-  email: {
-    serviceKey: getEnvVar('VITE_EMAIL_SERVICE_KEY', false),
-    fromAddress: getEnvVar('VITE_EMAIL_FROM_ADDRESS', false) || 'admin@codewars.com',
-    fromName: getEnvVar('VITE_EMAIL_FROM_NAME', false) || 'CodeWars 2.0',
-  },
   competition: {
     round1TimeLimit: getEnvNumber('VITE_ROUND1_TIME_LIMIT', 1800), // 30 minutes
     round2TimeLimit: getEnvNumber('VITE_ROUND2_TIME_LIMIT', 3600), // 60 minutes
@@ -74,10 +64,6 @@ export const validateConfig = {
 
   hasAIConfig(): boolean {
     return !!(config.ai.openaiApiKey || config.ai.geminiApiKey);
-  },
-
-  hasEmailConfig(): boolean {
-    return !!(config.email.serviceKey && config.email.fromAddress);
   },
 
   getAvailableAIProviders(): string[] {
@@ -98,10 +84,6 @@ export const validateConfig = {
       errors.push('At least one AI provider (OpenAI or Gemini) must be configured');
     }
 
-    if (!this.hasEmailConfig()) {
-      errors.push('Email service configuration is incomplete');
-    }
-
     return {
       isValid: errors.length === 0,
       errors,
@@ -118,7 +100,6 @@ if (isDevelopment) {
   console.log('🔧 Configuration Status:');
   console.log('  Supabase:', validateConfig.hasSupabaseConfig() ? '✅' : '❌');
   console.log('  AI Providers:', validateConfig.getAvailableAIProviders().join(', ') || '❌ None');
-  console.log('  Email Service:', validateConfig.hasEmailConfig() ? '✅' : '❌');
   
   const validation = validateConfig.validateAll();
   if (!validation.isValid) {

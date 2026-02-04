@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug RLS Policies</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            font-family: monospace;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #00ff00;
+        }
+        .container {
+            background: #2a2a2a;
+            padding: 30px;
+            border-radius: 8px;
+            border: 1px solid #00ff00;
+        }
+        h1 { color: #00ff00; text-align: center; }
+        .test-result {
+            margin: 10px 0;
+            padding: 10px;
+            border-left: 4px solid #00ff00;
+            background: #333;
+        }
+        .error { border-left-color: #ff0000; color: #ff6666; }
+        .success { border-left-color: #00ff00; color: #66ff66; }
+        .warning { border-left-color: #ffff00; color: #ffff66; }
+        button {
+            background: #333;
+            color: #00ff00;
+            border: 1px solid #00ff00;
+            padding: 10px 20px;
+            margin: 10px 5px;
+            cursor: pointer;
+            font-family: monospace;
+        }
+        button:hover { background: #00ff00; color: #000; }
+        .data-block {
+            background: #1a1a1a;
+            border: 1px solid #444;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        input {
+            background: #333;
+            color: #00ff00;
+            border: 1px solid #00ff00;
+            padding: 8px;
+            margin: 5px;
+            font-family: monospace;
+            width: 300px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Debug RLS Policies & API Access</h1>
+        
+        <div>
+            <h3>Step 1: Test API Key</h3>
+            <button onclick="testAPIKey()">Test Current API Key</button>
+            <div id="apiKeyResult"></div>
+        </div>
+
+        <div>
+            <h3>Step 2: Test Anonymous Access</h3>
+            <button onclick="testAnonymousAccess()">Test Anonymous Access</button>
+            <div id="anonResult"></div>
+        </div>
+
+        <div>
+            <h3>Step 3: Test Authenticated Access</h3>
+            <input type="email" id="testEmail" placeholder="admin@codewars.com" value="admin@codewars.com">
+            <input type="password" id="testPassword" placeholder="admin123!" value="admin123!">
+            <button onclick="testAuthenticatedAccess()">Test Authenticated Access</button>
+            <div id="authResult"></div>
+        </div>
+
+        <div>
+            <h3>Step 4: Check RLS Policies</h3>
+            <button onclick="checkRLSPolicies()">Check RLS Policies</button>
+            <div id="rlsResult"></div>
+        </div>
+
+        <div>
+            <h3>Step 5: Fix RLS Policies</h3>
+            <button onclick="generateRLSFix()">Generate RLS Fix SQL</button>
+            <div id="rlsFixResult"></div>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = "https://wscdzjtwaxunorfmpuzl.supabase.co";
+        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndzY2R6anR3YXh1bm9yZm1wdXpsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk2NTU1NDQsImV4cCI6MjA4NTIzMTU0NH0.0zDOMWXle1bwyM5LJpgh3PdEQq1n7E-mmL8adMZiWlc";
+
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        
+        function log(message, type = 'info', containerId = 'results') {
+            const container = document.getElementById(containerId);
+            if (container) {
+                const div = document.createElement('div');
+                div.className = `test-result ${type}`;
+                div.innerHTML = `<strong>[${new Date().toLocaleTimeString()}]</strong> ${message}`;
+                container.appendChild(div);
+                container.scrollTop = container.scrollHeight;
+            }
+        }
+
+        async function testAPIKey() {
+            const container = document.getElementById('apiKeyResult');
+            container.innerHTML = '';
+            
+            log('🔍 Testing API key...', 'info', 'apiKeyResult');
+            log(`URL: ${SUPABASE_URL}`, 'info', 'apiKeyResult');
+            log(`Key: ${SUPABASE_KEY.substring(0, 50)}...`, 'info', 'apiKeyResult');
+            
+            try {
+                // Test basic connection
+                const response = await fetch(`${SUPABASE_URL}/rest/v1/`, {
+                    headers: {
+                        'apikey': SUPABASE_KEY,
+                        'Authorization': `Bearer ${SUPABASE_KEY}`
+                    }
+                });
+                
+                if (response.ok) {
+                    log('✅ API key is valid and REST API is accessible', 'success', 'apiKeyResult');
+                } else {
+                    log(`❌ API key test failed: ${response.status} ${response.statusText}`, 'error', 'apiKeyResult');
+                }
+                
+            } catch (error) {
+                log(`❌ API key test failed: ${error.message}`, 'error', 'apiKeyResult');
+            }
+        }
+
+        async function testAnonymousAccess() {
+            const container = document.getElementById('anonResult');
+            container.innerHTML = '';
+            
+            log('🔍 Testing anonymous access to game_state...', 'info', 'anonResult');
+            
+            try {
+                // Test direct fetch to game_state
+                const response = await fetch(`${SUPABASE_URL}/rest/v1/game_state?select=*`, {
+                    headers: {
+                        'apikey': SUPABASE_KEY,
+                        'Authorization': `Bearer ${SUPABASE_KEY}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                log(`Response status: ${response.status} ${response.statusText}`, 'info', 'anonResult');
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    log('✅ Anonymous access to game_state works!', 'success', 'anonResult');
+                    log(`<div class="data-block">${JSON.stringify(data, null, 2)}</div>`, 'info', 'anonResult');
+                } else {
+                    const errorText = await response.text();
+                    log(`❌ Anonymous access failed: ${response.status}`, 'error', 'anonResult');
+                    log(`Error details: ${errorText}`, 'error', 'anonResult');
+                    
+                    if (response.status === 406) {
+                        log('💡 406 error suggests RLS policy is blocking access', 'warning', 'anonResult');
+                    }
+                }
+                
+            } catch (error) {
+                log(`❌ Anonymous access test failed: ${error.message}`, 'error', 'anonResult');
+            }
+        }
+
+        async function testAuthenticatedAccess() {
+            const container = document.getElementById('authResult');
+            container.innerHTML = '';
+            
+            const email = document.getElementById('testEmail').value;
+            const password = document.getElementById('testPassword').value;
+            
+            log(`🔍 Testing authenticated access for ${email}...`, 'info', 'authResult');
+            
+            try {
+                // First, sign in
+                const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+                    email: email,
+                    password: password
+                });
+                
+                if (authError) {
+                    log(`❌ Authentication failed: ${authError.message}`, 'error', 'authResult');
+                    return;
+                }
+                
+                log('✅ Authentication successful', 'success', 'authResult');
+                log(`User ID: ${authData.user.id}`, 'info', 'authResult');
+                
+                // Now test game_state access
+                const { data: gameStateData, error: gameStateError } = await supabase
+                    .from('game_state')
+                    .select('*');
+                
+                if (gameStateError) {
+                    log(`❌ Authenticated game_state access failed: ${gameStateError.message}`, 'error', 'authResult');
+                } else {
+                    log('✅ Authenticated access to game_state works!', 'success', 'authResult');
+                    log(`<div class="data-block">${JSON.stringify(gameStateData, null, 2)}</div>`, 'info', 'authResult');
+                }
+                
+                // Test user role
+                const { data: roleData, error: roleError } = await supabase
+                    .from('user_roles')
+                    .select('*')
+                    .eq('user_id', authData.user.id);
+                
+                if (roleError) {
+                    log(`⚠️ Could not check user role: ${roleError.message}`, 'warning', 'authResult');
+                } else {
+                    log(`User role: ${roleData.length > 0 ? roleData[0].role : 'No role assigned'}`, 'info', 'authResult');
+                }
+                
+                // Sign out
+                await supabase.auth.signOut();
+                log('🔓 Signed out', 'info', 'authResult');
+                
+            } catch (error) {
+                log(`❌ Authenticated access test failed: ${error.message}`, 'error', 'authResult');
+            }
+        }
+
+        async function checkRLSPolicies() {
+            const container = document.getElementById('rlsResult');
+            container.innerHTML = '';
+            
+            log('🔍 Checking RLS policies...', 'info', 'rlsResult');
+            
+            try {
+                // Test various table access
+                const tables = ['game_state', 'rounds', 'teams', 'user_roles'];
+                
+                for (const table of tables) {
+                    try {
+                        const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=*&limit=1`, {
+                            headers: {
+                                'apikey': SUPABASE_KEY,
+                                'Authorization': `Bearer ${SUPABASE_KEY}`,
+                                'Content-Type': 'application/json'
+                            }
+                        });
+                        
+                        if (response.ok) {
+                            log(`✅ ${table}: Anonymous access allowed`, 'success', 'rlsResult');
+                        } else {
+                            log(`❌ ${table}: ${response.status} ${response.statusText}`, 'error', 'rlsResult');
+                        }
+                    } catch (error) {
+                        log(`❌ ${table}: ${error.message}`, 'error', 'rlsResult');
+                    }
+                }
+                
+            } catch (error) {
+                log(`❌ RLS policy check failed: ${error.message}`, 'error', 'rlsResult');
+            }
+        }
+
+        function generateRLSFix() {
+            const container = document.getElementById('rlsFixResult');
+            
+            const fixSQL = `-- RLS Policy Fix for CodeWars 2.0
+-- Run this in Supabase SQL Editor
+
+-- 1. Allow anonymous read access to game_state (for competition status)
+DROP POLICY IF EXISTS "Allow anonymous read access to game_state" ON public.game_state;
+CREATE POLICY "Allow anonymous read access to game_state"
+ON public.game_state
+FOR SELECT
+TO anon, authenticated
+USING (true);
+
+-- 2. Allow anonymous read access to rounds (for round information)
+DROP POLICY IF EXISTS "Allow anonymous read access to rounds" ON public.rounds;
+CREATE POLICY "Allow anonymous read access to rounds"
+ON public.rounds
+FOR SELECT
+TO anon, authenticated
+USING (true);
+
+-- 3. Ensure admins can update game_state
+DROP POLICY IF EXISTS "Admins can update game_state" ON public.game_state;
+CREATE POLICY "Admins can update game_state"
+ON public.game_state
+FOR UPDATE
+TO authenticated
+USING (
+    EXISTS (
+        SELECT 1 FROM public.user_roles 
+        WHERE user_id = auth.uid() AND role = 'admin'
+    )
+);
+
+-- 4. Ensure admins can update rounds
+DROP POLICY IF EXISTS "Admins can update rounds" ON public.rounds;
+CREATE POLICY "Admins can update rounds"
+ON public.rounds
+FOR UPDATE
+TO authenticated
+USING (
+    EXISTS (
+        SELECT 1 FROM public.user_roles 
+        WHERE user_id = auth.uid() AND role = 'admin'
+    )
+);
+
+-- 5. Create initial game_state record if missing
+INSERT INTO public.game_state (current_round, is_competition_active)
+VALUES (0, false)
+ON CONFLICT DO NOTHING;
+
+-- 6. Verify policies are working
+SELECT 'RLS policies updated successfully' as status;`;
+
+            container.innerHTML = `
+                <div class="test-result success">
+                    <strong>📝 RLS Fix SQL - Copy and run in Supabase SQL Editor</strong>
+                    <div class="data-block">${fixSQL}</div>
+                </div>
+                <div class="test-result warning">
+                    <strong>⚠️ Instructions:</strong>
+                    <p>1. Go to Supabase Dashboard → SQL Editor</p>
+                    <p>2. Copy the SQL above and paste it</p>
+                    <p>3. Click "Run" to execute</p>
+                    <p>4. Refresh your app and test again</p>
+                </div>
+            `;
+        }
+
+        // Auto-run basic tests on load
+        window.addEventListener('load', () => {
+            testAPIKey();
+        });
+    </script>
+</body>
+</html>
