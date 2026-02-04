@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { JeopardyGrid } from "@/components/jeopardy/JeopardyGrid";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/components/auth/AuthContext";
+import { QuestionLoader, Round1Question, Round2Question, JeopardyQuestion } from "@/lib/questionLoader";
+import { SimpleEvaluator } from "@/lib/simpleEvaluator";
 import { toast } from "sonner";
 import {
   Terminal,
@@ -19,18 +21,22 @@ import {
 } from "lucide-react";
 
 interface Question {
-  id: string;
+  id: string | number;
   question_text: string;
   question_type: string;
-  options: unknown;
-  constraints: string | null;
-  category: string | null;
+  options?: string[];
+  constraints?: string[];
+  category?: string;
   points: number;
-  reward_points: number | null;
-  is_locked: boolean;
-  answered_by: string | null;
-  jeopardy_row: number | null;
-  jeopardy_col: number | null;
+  reward_points?: number;
+  difficulty?: string;
+  sample_input?: string;
+  sample_output?: string;
+  correct_answer?: number;
+  test_cases?: Array<{
+    input: string;
+    expected_output: string;
+  }>;
 }
 
 interface Team {
@@ -62,9 +68,12 @@ export const UserDashboard = () => {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [currentRound, setCurrentRound] = useState<Round | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [jeopardyGrid, setJeopardyGrid] = useState<Array<Array<JeopardyQuestion & { category: string }>>>([]);
+  const [jeopardyAnswered, setJeopardyAnswered] = useState<Map<string, string>>(new Map()); // questionId -> teamName
   const [selectedQuestion, setSelectedQuestion] = useState<Question | null>(null);
   const [answer, setAnswer] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [attemptedQuestions, setAttemptedQuestions] = useState<Map<string | number, { isCorrect: boolean, points: number }>>(new Map());
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
 
   useEffect(() => {
@@ -74,7 +83,6 @@ export const UserDashboard = () => {
     const channel = supabase
       .channel('user-updates')
       .on('postgres_changes' as const, { event: '*', schema: 'public', table: 'game_state' }, () => fetchGameState())
-      .on('postgres_changes' as const, { event: '*', schema: 'public', table: 'questions' }, () => fetchQuestions())
       .on('postgres_changes' as const, { event: '*', schema: 'public', table: 'teams' }, () => fetchTeam())
       .subscribe();
 
@@ -82,6 +90,13 @@ export const UserDashboard = () => {
       channel.unsubscribe();
     };
   }, [user]);
+
+  // Load questions when round changes
+  useEffect(() => {
+    if (currentRound && gameState?.is_competition_active) {
+      loadQuestionsForRound(currentRound.round_number);
+    }
+  }, [currentRound, gameState?.is_competition_active, team?.id]);
 
   const fetchInitialData = async () => {
     await Promise.all([fetchTeam(), fetchGameState()]);
@@ -98,6 +113,9 @@ export const UserDashboard = () => {
 
     if (!error && data) {
       setTeam(data);
+      console.log("Team loaded:", data);
+    } else {
+      console.error("Error fetching team:", error);
     }
   };
 
@@ -119,57 +137,244 @@ export const UserDashboard = () => {
 
       if (roundData) {
         setCurrentRound(roundData);
-        fetchQuestions(roundData.id);
       }
     }
   };
 
-  const fetchQuestions = async (roundId?: string) => {
-    const id = roundId || currentRound?.id;
-    if (!id) return;
-
-    const { data, error } = await supabase
-      .from("questions")
-      .select("*")
-      .eq("round_id", id);
-
-    if (!error && data) {
-      setQuestions(data);
+  const loadQuestionsForRound = async (roundNumber: number) => {
+    try {
+      console.log(`Loading questions for round ${roundNumber}`);
+      
+      if (roundNumber === 1) {
+        const data = await QuestionLoader.loadRound1Questions({
+          shuffle: true,
+          teamId: team?.id,
+          shuffleOptions: true,
+          selectCount: 10 // Show 10 questions for Round 1
+        });
+        
+        const formattedQuestions: Question[] = data.questions.map(q => ({
+          id: q.id,
+          question_text: q.question,
+          question_type: 'mcq',
+          options: q.options,
+          category: q.category,
+          points: q.points,
+          difficulty: q.difficulty,
+          correct_answer: q.correct_answer
+        }));
+        
+        setQuestions(formattedQuestions);
+        console.log(`Loaded ${formattedQuestions.length} Round 1 questions`);
+        
+      } else if (roundNumber === 2) {
+        const data = await QuestionLoader.loadRound2Questions({
+          shuffle: true,
+          teamId: team?.id
+        });
+        
+        const formattedQuestions: Question[] = data.questions.map(q => ({
+          id: q.id,
+          question_text: q.question,
+          question_type: 'constraint',
+          constraints: q.constraints,
+          category: q.category,
+          points: q.points,
+          difficulty: q.difficulty,
+          sample_input: q.sample_input,
+          sample_output: q.sample_output,
+          test_cases: q.test_cases
+        }));
+        
+        setQuestions(formattedQuestions);
+        console.log(`Loaded ${formattedQuestions.length} Round 2 questions`);
+        
+      } else if (roundNumber === 3) {
+        const data = await QuestionLoader.loadRound3Questions();
+        const grid = QuestionLoader.convertRound3ToGrid(data);
+        setJeopardyGrid(grid);
+        console.log(`Loaded Round 3 Jeopardy grid`);
+      }
+      
+    } catch (error) {
+      console.error(`Error loading Round ${roundNumber} questions:`, error);
+      toast.error(`Failed to load questions for Round ${roundNumber}`);
     }
   };
 
   const handleSubmitAnswer = async () => {
     if (!selectedQuestion || !team || !answer.trim()) return;
 
+    if (!currentRound?.id) {
+      toast.error("No active round found. Please wait for the admin to start a round.");
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
-      // Submit the answer
-      const { error } = await supabase
-        .from("submissions")
-        .insert({
-          team_id: team.id,
-          question_id: selectedQuestion.id,
-          round_id: currentRound?.id,
-          answer: answer.trim(),
-        });
+      console.log("Evaluating answer:", {
+        question: selectedQuestion.question_text,
+        answer: answer.trim(),
+        correct_answer: selectedQuestion.correct_answer
+      });
 
-      if (error) {
-        toast.error("Failed to submit answer");
+      // Evaluate answer using appropriate method based on question type
+      let evaluationResult;
+
+      if (selectedQuestion.options && selectedQuestion.correct_answer !== undefined) {
+        // MCQ evaluation (Round 1)
+        evaluationResult = SimpleEvaluator.evaluateMCQ(
+          answer.trim(),
+          selectedQuestion.correct_answer,
+          selectedQuestion.options,
+          selectedQuestion.points
+        );
+      } else if (selectedQuestion.question_type === 'constraint' || selectedQuestion.question_type === 'jeopardy') {
+        // Code evaluation (Round 2 & 3)
+        const testCases = selectedQuestion.test_cases || 
+          (selectedQuestion.sample_input && selectedQuestion.sample_output ? 
+            [{ input: selectedQuestion.sample_input, expected_output: selectedQuestion.sample_output }] : 
+            []);
+        
+        evaluationResult = SimpleEvaluator.evaluateCode(
+          answer.trim(),
+          testCases,
+          selectedQuestion.reward_points || selectedQuestion.points
+        );
       } else {
-        toast.success("Answer submitted! Awaiting evaluation...");
-        setAnswer("");
-        setSelectedQuestion(null);
+        // Math evaluation (simple questions)
+        evaluationResult = SimpleEvaluator.evaluateMath(
+          answer.trim(),
+          selectedQuestion.question_text,
+          selectedQuestion.points
+        );
       }
+
+      console.log("Answer evaluation:", evaluationResult);
+
+      if (evaluationResult.isCorrect && evaluationResult.points > 0) {
+        // Update team score directly in database
+        const currentRoundField = `round${gameState?.current_round || 1}_score`;
+        const { error: updateError } = await supabase
+          .from("teams")
+          .update({
+            [currentRoundField]: team[currentRoundField] + evaluationResult.points,
+            total_score: team.total_score + evaluationResult.points
+          })
+          .eq("id", team.id);
+
+        if (updateError) {
+          console.error("Score update error:", updateError);
+          toast.error("Failed to update score");
+        } else {
+          toast.success(`Correct! +${evaluationResult.points} points`);
+          // Track this question as correctly answered
+          setAttemptedQuestions(prev => new Map(prev.set(selectedQuestion.id, { 
+            isCorrect: true, 
+            points: evaluationResult.points 
+          })));
+          // Update local team state
+          setTeam(prev => prev ? {
+            ...prev,
+            [currentRoundField]: prev[currentRoundField] + evaluationResult.points,
+            total_score: prev.total_score + evaluationResult.points
+          } : null);
+        }
+      } else {
+        toast.error(evaluationResult.feedback || "Incorrect answer. Try again!");
+        // Track this question as incorrectly answered
+        setAttemptedQuestions(prev => new Map(prev.set(selectedQuestion.id, { 
+          isCorrect: false, 
+          points: 0 
+        })));
+      }
+
+      setAnswer("");
+      setSelectedQuestion(null);
+
     } catch (err) {
-      toast.error("An error occurred");
+      console.error("Answer evaluation error:", err);
+      toast.error("An error occurred while checking your answer");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleSelectJeopardyQuestion = (question: Question) => {
+  const handleSelectJeopardyQuestion = (gridQuestion: any) => {
+    const question: Question = {
+      id: `${gridQuestion.jeopardy_row}-${gridQuestion.jeopardy_col}`,
+      question_text: gridQuestion.question,
+      question_type: 'jeopardy',
+      category: gridQuestion.category,
+      points: gridQuestion.points,
+      reward_points: gridQuestion.reward,
+      difficulty: gridQuestion.difficulty,
+      sample_input: gridQuestion.sample_input,
+      sample_output: gridQuestion.sample_output
+    };
     setSelectedQuestion(question);
+  };
+
+  const handleJeopardySubmit = async () => {
+    if (!selectedQuestion || !team || !answer.trim()) return;
+
+    setIsSubmitting(true);
+
+    try {
+      // Evaluate Jeopardy answer (code evaluation for Round 3)
+      const testCases = selectedQuestion.test_cases || 
+        (selectedQuestion.sample_input && selectedQuestion.sample_output ? 
+          [{ input: selectedQuestion.sample_input, expected_output: selectedQuestion.sample_output }] : 
+          []);
+      
+      const evaluationResult = SimpleEvaluator.evaluateCode(
+        answer.trim(),
+        testCases,
+        selectedQuestion.reward_points || selectedQuestion.points
+      );
+
+      console.log("Jeopardy evaluation:", evaluationResult);
+
+      if (evaluationResult.isCorrect && evaluationResult.points > 0) {
+        // Update team score
+        const { error: updateError } = await supabase
+          .from("teams")
+          .update({
+            round3_score: team.round3_score + evaluationResult.points,
+            total_score: team.total_score + evaluationResult.points
+          })
+          .eq("id", team.id);
+
+        if (updateError) {
+          console.error("Score update error:", updateError);
+          toast.error("Failed to update score");
+        } else {
+          toast.success(`Correct! +${evaluationResult.points} points`);
+          
+          // Mark this question as answered by this team
+          setJeopardyAnswered(prev => new Map(prev.set(selectedQuestion.id.toString(), team.team_name)));
+          
+          // Update local team state
+          setTeam(prev => prev ? {
+            ...prev,
+            round3_score: prev.round3_score + evaluationResult.points,
+            total_score: prev.total_score + evaluationResult.points
+          } : null);
+        }
+      } else {
+        toast.error(evaluationResult.feedback || "Incorrect answer. Try again!");
+      }
+
+      setAnswer("");
+      setSelectedQuestion(null);
+
+    } catch (err) {
+      console.error("Jeopardy answer evaluation error:", err);
+      toast.error("An error occurred while checking your answer");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (team?.is_disqualified) {
@@ -237,21 +442,68 @@ export const UserDashboard = () => {
         // Jeopardy Round
         <div className="space-y-6">
           <JeopardyGrid
-            questions={questions.map(q => ({
-              id: q.id,
-              category: q.category || "",
+            questions={jeopardyGrid.flat().map(q => ({
+              id: `${q.jeopardy_row}-${q.jeopardy_col}`,
+              category: q.category,
               points: q.points,
-              reward_points: q.reward_points || q.points,
-              is_locked: q.is_locked,
-              answered_by: q.answered_by,
+              reward_points: q.reward,
+              is_locked: false, // TODO: Implement locking logic
+              answered_by: jeopardyAnswered.get(`${q.jeopardy_row}-${q.jeopardy_col}`) || null,
               jeopardy_row: q.jeopardy_row || 0,
               jeopardy_col: q.jeopardy_col || 0,
             }))}
-            onSelectQuestion={(q) => {
-              const fullQuestion = questions.find(fq => fq.id === q.id);
-              if (fullQuestion) setSelectedQuestion(fullQuestion);
-            }}
+            onSelectQuestion={handleSelectJeopardyQuestion}
+            gridData={jeopardyGrid}
           />
+          
+          {/* Jeopardy Answer Input */}
+          {selectedQuestion && (
+            <Card variant="neon">
+              <CardHeader>
+                <CardTitle>Answer Question</CardTitle>
+                <CardDescription>
+                  {selectedQuestion.category} - {selectedQuestion.points} points
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="p-4 bg-muted/50 rounded-lg">
+                  <p className="font-mono text-sm">{selectedQuestion.question_text}</p>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-mono text-muted-foreground">
+                    YOUR ANSWER
+                  </label>
+                  <Input
+                    value={answer}
+                    onChange={(e) => setAnswer(e.target.value)}
+                    placeholder="Enter your answer..."
+                    className="font-mono"
+                  />
+                </div>
+                
+                <Button
+                  variant="neon"
+                  size="lg"
+                  className="w-full"
+                  onClick={handleJeopardySubmit}
+                  disabled={!answer.trim() || isSubmitting}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Checking...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-5 h-5" />
+                      Submit Answer
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
         </div>
       ) : (
         // Quiz / Constraint Rounds
@@ -265,25 +517,53 @@ export const UserDashboard = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="max-h-[400px] overflow-y-auto scrollbar-cyber space-y-2">
-              {questions.map((q, index) => (
-                <motion.button
-                  key={q.id}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                  onClick={() => setSelectedQuestion(q)}
-                  className={`w-full text-left p-4 rounded-lg border transition-all ${
-                    selectedQuestion?.id === q.id
-                      ? "border-primary bg-primary/10"
-                      : "border-border hover:border-primary/50"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono">Q{index + 1}</span>
-                    <span className="text-sm text-primary font-mono">{q.points} pts</span>
-                  </div>
-                </motion.button>
-              ))}
+              {questions.map((q, index) => {
+                const attemptResult = attemptedQuestions.get(q.id);
+                const borderColor = attemptResult 
+                  ? attemptResult.isCorrect 
+                    ? "border-green-500 bg-green-500/10" 
+                    : "border-red-500 bg-red-500/10"
+                  : selectedQuestion?.id === q.id
+                    ? "border-primary bg-primary/20 shadow-lg shadow-primary/25 ring-2 ring-primary/30"
+                    : "border-border hover:border-primary/50 hover:bg-primary/5";
+                
+                return (
+                  <motion.button
+                    key={q.id}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                    onClick={() => setSelectedQuestion(q)}
+                    className={`w-full text-left p-4 rounded-lg border transition-all ${borderColor}`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono">Q{index + 1}</span>
+                        {selectedQuestion?.id === q.id && (
+                          <CheckCircle className="w-4 h-4 text-primary" />
+                        )}
+                        {attemptResult && (
+                          attemptResult.isCorrect ? (
+                            <CheckCircle className="w-4 h-4 text-green-500" />
+                          ) : (
+                            <XCircle className="w-4 h-4 text-red-500" />
+                          )
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">{q.difficulty}</span>
+                        <span className="text-sm text-primary font-mono">{q.points} pts</span>
+                        {attemptResult && attemptResult.isCorrect && (
+                          <span className="text-xs text-green-500 font-mono">+{attemptResult.points}</span>
+                        )}
+                      </div>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-1 truncate">
+                      {q.category}
+                    </p>
+                  </motion.button>
+                );
+              })}
             </CardContent>
           </Card>
 
@@ -301,30 +581,60 @@ export const UserDashboard = () => {
                     <p className="font-mono text-foreground whitespace-pre-wrap">
                       {selectedQuestion.question_text}
                     </p>
-                    {selectedQuestion.constraints && (
+                    {selectedQuestion.constraints && selectedQuestion.constraints.length > 0 && (
                       <div className="mt-4 p-3 rounded bg-warning/10 border border-warning/30">
                         <p className="text-sm font-mono text-warning">
                           <AlertCircle className="w-4 h-4 inline mr-2" />
-                          Constraints: {selectedQuestion.constraints}
+                          Constraints:
                         </p>
+                        <ul className="mt-2 space-y-1">
+                          {selectedQuestion.constraints.map((constraint, idx) => (
+                            <li key={idx} className="text-sm font-mono text-warning">
+                              • {constraint}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {selectedQuestion.sample_input && (
+                      <div className="mt-4 p-3 rounded bg-info/10 border border-info/30">
+                        <p className="text-sm font-mono text-info mb-2">Sample Input:</p>
+                        <pre className="text-sm font-mono text-info whitespace-pre-wrap">
+                          {selectedQuestion.sample_input}
+                        </pre>
+                      </div>
+                    )}
+                    {selectedQuestion.sample_output && (
+                      <div className="mt-4 p-3 rounded bg-success/10 border border-success/30">
+                        <p className="text-sm font-mono text-success mb-2">Sample Output:</p>
+                        <pre className="text-sm font-mono text-success whitespace-pre-wrap">
+                          {selectedQuestion.sample_output}
+                        </pre>
                       </div>
                     )}
                   </div>
 
-                  {Array.isArray(selectedQuestion.options) && selectedQuestion.options.length > 0 ? (
+                  {selectedQuestion.options && selectedQuestion.options.length > 0 ? (
                     // MCQ Options
                     <div className="space-y-2">
-                      {(selectedQuestion.options as string[]).map((option, idx) => (
+                      {selectedQuestion.options.map((option, idx) => (
                         <Button
                           key={idx}
                           variant={answer === option ? "neon" : "outline"}
-                          className="w-full justify-start"
+                          className={`w-full justify-start transition-all ${
+                            answer === option 
+                              ? "ring-2 ring-primary/50 shadow-lg shadow-primary/25" 
+                              : "hover:border-primary/50"
+                          }`}
                           onClick={() => setAnswer(option)}
                         >
                           <span className="font-mono mr-3">
                             {String.fromCharCode(65 + idx)}.
                           </span>
                           {option}
+                          {answer === option && (
+                            <CheckCircle className="w-4 h-4 ml-auto text-primary" />
+                          )}
                         </Button>
                       ))}
                     </div>
@@ -347,7 +657,7 @@ export const UserDashboard = () => {
                     variant="neon"
                     size="lg"
                     className="w-full"
-                    onClick={handleSubmitAnswer}
+                    onClick={gameState?.current_round === 3 ? handleJeopardySubmit : handleSubmitAnswer}
                     disabled={!answer.trim() || isSubmitting}
                   >
                     {isSubmitting ? (

@@ -293,7 +293,7 @@ export class JeopardyFCFS {
     }
   }
 
-  // Submit answer and handle negative marking for Jeopardy
+  // Submit answer and handle scoring for Jeopardy
   static async submitAnswer(
     questionId: string,
     teamId: string,
@@ -303,64 +303,45 @@ export class JeopardyFCFS {
     questionPoints: number // Base points for the question (for negative marking)
   ): Promise<boolean> {
     try {
-      // Start transaction-like operations
-      
-      // 1. Submit the answer
-      const { error: submissionError } = await supabase
-        .from("submissions")
-        .insert({
-          team_id: teamId,
-          question_id: questionId,
-          round_number: 3,
-          answer: answer,
-          is_correct: isCorrect,
-          points_earned: pointsEarned,
-          submitted_at: new Date().toISOString()
-        });
+      // Update team score directly in database
+      const { data: currentTeam, error: fetchError } = await supabase
+        .from("teams")
+        .select("round3_score, total_score")
+        .eq("id", teamId)
+        .single();
 
-      if (submissionError) throw submissionError;
-
-      if (isCorrect) {
-        // 2a. If correct: Mark question as answered and release lock
-        const { error: questionError } = await supabase
-          .from("questions")
-          .update({
-            answered_by: teamId,
-            answered_at: new Date().toISOString()
-          })
-          .eq("id", questionId);
-
-        if (questionError) throw questionError;
-
-        // Release the lock permanently
-        const { error: lockError } = await supabase
-          .from("question_locks")
-          .update({ is_active: false })
-          .eq("question_id", questionId)
-          .eq("team_id", teamId)
-          .eq("is_active", true);
-
-        if (lockError) throw lockError;
-
-      } else {
-        // 2b. If incorrect: Just release lock, keep question available for others
-        const { error: lockError } = await supabase
-          .from("question_locks")
-          .update({ is_active: false })
-          .eq("question_id", questionId)
-          .eq("team_id", teamId)
-          .eq("is_active", true);
-
-        if (lockError) throw lockError;
-
-        // Question remains available for other teams
-        console.log(`Question ${questionId} remains available after incorrect answer by team ${teamId}`);
+      if (fetchError || !currentTeam) {
+        console.error("Error fetching team:", fetchError);
+        return false;
       }
 
+      // Update Round 3 score and total score
+      const newRound3Score = currentTeam.round3_score + pointsEarned;
+      const newTotalScore = currentTeam.total_score + pointsEarned;
+
+      const { error: updateError } = await supabase
+        .from("teams")
+        .update({
+          round3_score: newRound3Score,
+          total_score: newTotalScore
+        })
+        .eq("id", teamId);
+
+      if (updateError) {
+        console.error("Score update error:", updateError);
+        return false;
+      }
+
+      // Release the lock from our in-memory tracking
+      if (this.questionLocks.has(questionId)) {
+        this.questionLocks.delete(questionId);
+      }
+
+      console.log(`Answer evaluated for question ${questionId} by team ${teamId}: ${isCorrect ? 'CORRECT' : 'INCORRECT'} (${pointsEarned} points)`);
       return true;
 
     } catch (error) {
-      console.error("Error submitting answer:", error);
+      console.error("Error processing answer:", error);
       return false;
     }
   }

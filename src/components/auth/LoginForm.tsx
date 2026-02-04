@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -14,8 +14,16 @@ export const LoginForm = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  const { signIn } = useAuth();
+  const { signIn, user, userRole, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
+
+  // Handle navigation after successful login and role is loaded
+  useEffect(() => {
+    if (user && !authLoading && userRole) {
+      // Role is loaded, navigate to dashboard
+      navigate("/dashboard");
+    }
+  }, [user, userRole, authLoading, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,13 +36,14 @@ export const LoginForm = () => {
       if (result.error) {
         setError(result.error.message);
         toast.error(result.error.message);
+        setIsLoading(false);
       } else {
-        toast.success("Welcome back!");
-        navigate("/dashboard");
+        toast.success("Authenticating...");
+        // Don't set isLoading to false here - let the useEffect handle navigation
+        // isLoading will be set to false when navigation happens or if there's an error
       }
     } catch (err) {
       setError("An unexpected error occurred");
-    } finally {
       setIsLoading(false);
     }
   };

@@ -333,8 +333,8 @@ export class QuestionLoader {
     }
 
     const categoryNames = Object.keys(data.categories);
-    if (categoryNames.length !== 6) {
-      throw new Error('Round 3 must have exactly 6 categories for 6x6 grid');
+    if (categoryNames.length < 1) {
+      throw new Error('Round 3 must have at least 1 category');
     }
 
     categoryNames.forEach(categoryKey => {
@@ -343,8 +343,8 @@ export class QuestionLoader {
         throw new Error(`Invalid category structure for ${categoryKey}`);
       }
 
-      if (category.questions.length !== 5) {
-        throw new Error(`Category ${categoryKey} must have exactly 5 questions`);
+      if (category.questions.length < 1) {
+        throw new Error(`Category ${categoryKey} must have at least 1 question`);
       }
 
       category.questions.forEach((question, index) => {
@@ -390,27 +390,33 @@ export class QuestionLoader {
     }
   }
 
-  // Convert Round 3 data to grid format for Jeopardy component (6x6 grid)
+  // Convert Round 3 data to grid format for Jeopardy component (dynamic grid based on data)
   static convertRound3ToGrid(data: Round3Data): Array<Array<JeopardyQuestion & { category: string }>> {
     const categories = Object.keys(data.categories);
     const grid: Array<Array<JeopardyQuestion & { category: string }>> = [];
 
-    // Create 6 rows (difficulty levels)
-    for (let row = 0; row < 6; row++) {
+    // Get the number of questions in the first category to determine rows
+    const firstCategory = data.categories[categories[0]];
+    const numRows = firstCategory.questions.length;
+
+    // Create rows (difficulty levels)
+    for (let row = 0; row < numRows; row++) {
       const gridRow: Array<JeopardyQuestion & { category: string }> = [];
       
-      // Create 6 columns (categories)
-      for (let col = 0; col < 6; col++) {
+      // Create columns (categories)
+      for (let col = 0; col < categories.length; col++) {
         const categoryKey = categories[col];
         const category = data.categories[categoryKey];
         const question = category.questions[row];
         
-        gridRow.push({
-          ...question,
-          category: categoryKey,
-          jeopardy_row: row,
-          jeopardy_col: col
-        });
+        if (question) {
+          gridRow.push({
+            ...question,
+            category: categoryKey,
+            jeopardy_row: row,
+            jeopardy_col: col
+          });
+        }
       }
       
       grid.push(gridRow);

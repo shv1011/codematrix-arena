@@ -13,11 +13,27 @@ const Dashboard = () => {
   const { user, userRole, isLoading, signOut } = useAuth();
   const navigate = useNavigate();
 
+  console.log('Dashboard render:', { user: user?.email, userRole, isLoading });
+
   useEffect(() => {
     if (!isLoading && !user) {
       navigate("/login");
     }
   }, [user, isLoading, navigate]);
+
+  useEffect(() => {
+    // Show appropriate welcome message based on role
+    if (!isLoading && user && userRole) {
+      console.log('Showing welcome message for role:', userRole);
+      if (userRole === "admin") {
+        toast.success("Welcome to Admin Dashboard!");
+      } else if (userRole === "supervisor") {
+        toast.success("Welcome to Supervisor View!");
+      } else {
+        toast.success("Welcome to CodeWars!");
+      }
+    }
+  }, [userRole, isLoading, user]);
 
   const handleSignOut = async () => {
     await signOut();

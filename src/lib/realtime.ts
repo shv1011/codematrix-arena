@@ -62,25 +62,55 @@ export class RealtimeManager {
 
   // Setup connection monitoring
   private setupConnectionMonitoring() {
-    // Monitor Supabase connection status
-    supabase.realtime.onOpen(() => {
-      console.log('Realtime connection opened');
-      this.connectionStatus = 'connected';
-      this.reconnectAttempts = 0;
-      this.reconnectDelay = 1000;
-    });
+    // In newer Supabase versions, connection monitoring is handled differently
+    // We'll monitor through channel subscription status instead
+    console.log('Realtime manager initialized');
+    this.connectionStatus = 'connected'; // Assume connected initially
+    
+    // Set up a heartbeat to check connection health
+    this.startConnectionHeartbeat();
+  }
 
-    supabase.realtime.onClose(() => {
-      console.log('Realtime connection closed');
-      this.connectionStatus = 'disconnected';
-      this.handleReconnection();
-    });
+  // Start connection heartbeat monitoring
+  private startConnectionHeartbeat() {
+    setInterval(async () => {
+      try {
+        // Test connection by creating a temporary channel
+        const testChannel = supabase.channel('connection_test');
+        const subscribePromise = new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            reject(new Error('Connection timeout'));
+          }, 5000);
 
-    supabase.realtime.onError((error) => {
-      console.error('Realtime connection error:', error);
-      this.connectionStatus = 'disconnected';
-      this.handleReconnection();
-    });
+          testChannel.subscribe((status) => {
+            clearTimeout(timeout);
+            if (status === 'SUBSCRIBED') {
+              resolve(status);
+            } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+              reject(new Error(`Connection failed: ${status}`));
+            }
+          });
+        });
+
+        await subscribePromise;
+        
+        // Clean up test channel
+        testChannel.unsubscribe();
+        
+        if (this.connectionStatus !== 'connected') {
+          console.log('Realtime connection restored');
+          this.connectionStatus = 'connected';
+          this.reconnectAttempts = 0;
+          this.reconnectDelay = 1000;
+        }
+      } catch (error) {
+        if (this.connectionStatus === 'connected') {
+          console.log('Realtime connection lost');
+          this.connectionStatus = 'disconnected';
+          this.handleReconnection();
+        }
+      }
+    }, 30000); // Check every 30 seconds
   }
 
   // Handle reconnection logic
@@ -98,7 +128,13 @@ export class RealtimeManager {
       
       // Resubscribe to all channels
       this.subscriptions.forEach((subscription, key) => {
-        subscription.channel.subscribe();
+        try {
+          // Unsubscribe and resubscribe
+          subscription.channel.unsubscribe();
+          subscription.channel.subscribe();
+        } catch (error) {
+          console.error(`Error resubscribing to ${key}:`, error);
+        }
       });
 
       // Exponential backoff
@@ -140,7 +176,14 @@ export class RealtimeManager {
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log(`Score updates subscription status: ${status}`);
+        if (status === 'SUBSCRIBED') {
+          this.connectionStatus = 'connected';
+        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          this.connectionStatus = 'disconnected';
+        }
+      });
 
     const subscription: RealtimeSubscription = {
       channel,
@@ -234,7 +277,14 @@ export class RealtimeManager {
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log(`Question updates subscription status: ${status}`);
+        if (status === 'SUBSCRIBED') {
+          this.connectionStatus = 'connected';
+        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          this.connectionStatus = 'disconnected';
+        }
+      });
 
     const subscription: RealtimeSubscription = {
       channel,
@@ -276,7 +326,14 @@ export class RealtimeManager {
           callback(update);
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log(`Game state subscription status: ${status}`);
+        if (status === 'SUBSCRIBED') {
+          this.connectionStatus = 'connected';
+        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          this.connectionStatus = 'disconnected';
+        }
+      });
 
     const subscription: RealtimeSubscription = {
       channel,
@@ -327,7 +384,14 @@ export class RealtimeManager {
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log(`Team updates subscription status: ${status}`);
+        if (status === 'SUBSCRIBED') {
+          this.connectionStatus = 'connected';
+        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          this.connectionStatus = 'disconnected';
+        }
+      });
 
     const subscription: RealtimeSubscription = {
       channel,
@@ -375,7 +439,14 @@ export class RealtimeManager {
           callback(submission);
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log(`Submissions subscription status: ${status}`);
+        if (status === 'SUBSCRIBED') {
+          this.connectionStatus = 'connected';
+        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          this.connectionStatus = 'disconnected';
+        }
+      });
 
     const subscription: RealtimeSubscription = {
       channel,
@@ -421,7 +492,14 @@ export class RealtimeManager {
       .on('broadcast', { event }, (payload) => {
         callback(payload);
       })
-      .subscribe();
+      .subscribe((status) => {
+        console.log(`Broadcast subscription status: ${status}`);
+        if (status === 'SUBSCRIBED') {
+          this.connectionStatus = 'connected';
+        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          this.connectionStatus = 'disconnected';
+        }
+      });
 
     const subscription: RealtimeSubscription = {
       channel: realtimeChannel,

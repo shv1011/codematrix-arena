@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Leaderboard } from "@/components/leaderboard/Leaderboard";
 import { TeamManagement } from "@/components/admin/TeamManagement";
-import { TeamAccessControl } from "@/components/admin/TeamAccessControl";
 import { QuestionManager } from "@/components/admin/QuestionManager";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -21,7 +20,6 @@ import {
   Terminal,
   Zap,
   Users as UsersIcon,
-  Shield,
   FileText
 } from "lucide-react";
 
@@ -99,35 +97,38 @@ export const AdminDashboard = () => {
 
   const fetchGameState = async () => {
     try {
+      // First, try to get the most recent game state (ordered by updated_at)
       const { data, error } = await supabase
         .from("game_state")
         .select("*")
-        .single();
+        .order("updated_at", { ascending: false })
+        .limit(1);
       
       if (error) {
         console.error("Error fetching game state:", error);
-        if (error.code === 'PGRST116') {
-          // No rows returned - create initial game state
-          console.log("No game state found, creating initial state...");
-          const { data: newGameState, error: insertError } = await supabase
-            .from("game_state")
-            .insert({ current_round: 0, is_competition_active: false })
-            .select()
-            .single();
-          
-          if (insertError) {
-            console.error("Error creating initial game state:", insertError);
-            toast.error("Failed to initialize game state");
-          } else {
-            setGameState(newGameState);
-            console.log("Initial game state created:", newGameState);
-          }
+        toast.error(`Failed to load game state: ${error.message}`);
+        return;
+      }
+      
+      if (data && data.length > 0) {
+        setGameState(data[0]);
+        console.log("Game state loaded:", data[0]);
+      } else {
+        // No rows returned - create initial game state
+        console.log("No game state found, creating initial state...");
+        const { data: newGameState, error: insertError } = await supabase
+          .from("game_state")
+          .insert({ current_round: 0, is_competition_active: false })
+          .select()
+          .single();
+        
+        if (insertError) {
+          console.error("Error creating initial game state:", insertError);
+          toast.error("Failed to initialize game state");
         } else {
-          toast.error(`Failed to load game state: ${error.message}`);
+          setGameState(newGameState);
+          console.log("Initial game state created:", newGameState);
         }
-      } else if (data) {
-        setGameState(data);
-        console.log("Game state loaded:", data);
       }
     } catch (err) {
       console.error("Exception fetching game state:", err);
@@ -164,20 +165,26 @@ export const AdminDashboard = () => {
     console.log("Toggling competition. Current state:", gameState);
     
     try {
+      const newStatus = !gameState.is_competition_active;
+      
       const { error } = await supabase
         .from("game_state")
-        .update({ is_competition_active: !gameState.is_competition_active })
+        .update({ is_competition_active: newStatus })
         .eq("id", gameState.id);
       
       if (error) {
         console.error("Toggle competition error:", error);
         toast.error(`Failed to toggle competition: ${error.message}`);
       } else {
-        const newStatus = gameState.is_competition_active ? "Competition paused" : "Competition started!";
-        toast.success(newStatus);
-        console.log("Competition toggled successfully:", newStatus);
-        // Refresh game state
-        await fetchGameState();
+        const statusMessage = newStatus ? "Competition started!" : "Competition paused";
+        toast.success(statusMessage);
+        console.log("Competition toggled successfully:", statusMessage);
+        
+        // Immediately update local state for instant UI feedback
+        setGameState(prev => prev ? { ...prev, is_competition_active: newStatus } : null);
+        
+        // Also refresh from database to ensure consistency
+        setTimeout(() => fetchGameState(), 500);
       }
     } catch (err) {
       console.error("Toggle competition exception:", err);
@@ -233,8 +240,24 @@ export const AdminDashboard = () => {
       toast.success(`Round ${roundNumber} started!`);
       console.log(`Round ${roundNumber} started successfully`);
       
-      // Refresh data
-      await Promise.all([fetchGameState(), fetchRounds()]);
+      // Immediately update local state for instant UI feedback
+      setGameState(prev => prev ? { 
+        ...prev, 
+        current_round: roundNumber, 
+        is_competition_active: true 
+      } : null);
+      
+      // Update rounds state immediately
+      setRounds(prev => prev.map(round => ({
+        ...round,
+        is_active: round.round_number === roundNumber
+      })));
+      
+      // Also refresh from database to ensure consistency
+      setTimeout(() => {
+        fetchGameState();
+        fetchRounds();
+      }, 500);
       
     } catch (err) {
       console.error("Start round exception:", err);
@@ -324,7 +347,7 @@ export const AdminDashboard = () => {
 
       {/* Main Content Tabs */}
       <Tabs defaultValue="control" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="control" className="flex items-center gap-2">
             <Settings className="w-4 h-4" />
             Control
@@ -336,10 +359,6 @@ export const AdminDashboard = () => {
           <TabsTrigger value="manage" className="flex items-center gap-2">
             <UsersIcon className="w-4 h-4" />
             Manage Teams
-          </TabsTrigger>
-          <TabsTrigger value="access" className="flex items-center gap-2">
-            <Shield className="w-4 h-4" />
-            Access Control
           </TabsTrigger>
           <TabsTrigger value="leaderboard" className="flex items-center gap-2">
             <Trophy className="w-4 h-4" />
@@ -469,10 +488,6 @@ export const AdminDashboard = () => {
         </TabsContent>
 
         {/* Team Access Control Tab */}
-        <TabsContent value="access">
-          <TeamAccessControl />
-        </TabsContent>
-
         {/* Leaderboard Tab */}
         <TabsContent value="leaderboard">
           <Leaderboard 

@@ -192,7 +192,6 @@ export const QuizInterface = () => {
       const submitStartTime = performance.now();
       
       let totalScore = 0;
-      const submissions = [];
 
       // Get round ID first
       const { data: roundData, error: roundError } = await supabase
@@ -249,35 +248,9 @@ export const QuizInterface = () => {
         // Round 1: 10 points per correct answer
         const pointsEarned = aiResult.isCorrect ? 10 : 0;
         totalScore += pointsEarned;
-
-        submissions.push({
-          team_id: team.id,
-          question_id: question.id.toString(),
-          round_id: roundData.id,
-          question_text: question.question,
-          answer: userAnswer,
-          is_correct: aiResult.isCorrect,
-          points_earned: pointsEarned,
-          ai_feedback: aiResult.feedback,
-          ai_evaluation: aiResult,
-          submitted_at: new Date().toISOString()
-        });
       }
 
-      // Submit all answers to submissions table with performance monitoring
-      await performanceMonitor.timeFunction(
-        'database_query',
-        async () => {
-          const { error: submissionError } = await supabase
-            .from("submissions")
-            .insert(submissions);
-
-          if (submissionError) throw submissionError;
-        },
-        { operation: 'insert_submissions', count: submissions.length }
-      );
-
-      // Update team score using cumulative scoring system
+      // Skip submissions table - directly update team score
       await cumulativeScoring.updateRoundScore(team.id, 1, totalScore);
 
       setQuizState(prev => ({

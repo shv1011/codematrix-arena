@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Code Evaluation Test</title>
+</head>
+<body>
+    <h1>Code Evaluation Test</h1>
+    
+    <h2>Test 1: Simple Function</h2>
+    <pre>
+function reverse(str) {
+    if (str === "") return "";
+    return reverse(str.substr(1)) + str.charAt(0);
+}
+    </pre>
+    <p>Input: "hello" → Expected: "olleh"</p>
+    
+    <h2>Test 2: Math Function</h2>
+    <pre>
+function add(a, b) {
+    return a + b;
+}
+    </pre>
+    <p>Input: 4, 5 → Expected: 9</p>
+    
+    <h2>Test 3: Array Function</h2>
+    <pre>
+function findMax(arr) {
+    return arr.reduce((max, current) => current > max ? current : max);
+}
+    </pre>
+    <p>Input: [1,5,3,9,2] → Expected: 9</p>
+    
+    <script>
+        console.log("Code evaluation system ready!");
+        console.log("Use the competition interface to test these functions.");
+    </script>
+</body>
+</html>

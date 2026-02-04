@@ -4,7 +4,7 @@
     "round_name": "Code Jeopardy",
     "round_type": "jeopardy",
     "time_limit_seconds": 5400,
-    "grid_size": "7x5",
+    "grid_size": "6x6",
     "description": "Jeopardy-style coding questions organized by categories with increasing difficulty and reward points."
   },
   "categories": {
@@ -75,13 +75,27 @@
           "points": 1000,
           "reward": 2500,
           "difficulty": "extreme",
-          "question": "Implement a data structure that supports insert, delete, and getRandom in O(1) time.",
-          "sample_input": "insert(1), insert(2), getRandom(), delete(1), getRandom()",
-          "sample_output": "Various based on random selection",
+          "question": "What is 50 + 25?",
+          "sample_input": "50 + 25",
+          "sample_output": "75",
           "test_cases": [
             {
-              "input": "insert(1), insert(2), delete(1)",
-              "expected_output": "Should maintain O(1) operations"
+              "input": "50 + 25",
+              "expected_output": "75"
+            }
+          ]
+        },
+        {
+          "points": 1500,
+          "reward": 3000,
+          "difficulty": "extreme-plus",
+          "question": "What is 12 * 5?",
+          "sample_input": "12 * 5",
+          "sample_output": "60",
+          "test_cases": [
+            {
+              "input": "12 * 5",
+              "expected_output": "60"
             }
           ]
         }
@@ -150,13 +164,27 @@
           "points": 1000,
           "reward": 2500,
           "difficulty": "extreme",
-          "question": "Design an observer pattern with multiple observers and subjects.",
-          "sample_input": "Subject notifying multiple observers",
-          "sample_output": "All observers updated correctly",
+          "question": "What is 20 + 30?",
+          "sample_input": "20 + 30",
+          "sample_output": "50",
           "test_cases": [
             {
-              "input": "Subject with 3 observers, state change",
-              "expected_output": "All 3 observers notified"
+              "input": "20 + 30",
+              "expected_output": "50"
+            }
+          ]
+        },
+        {
+          "points": 1500,
+          "reward": 3000,
+          "difficulty": "extreme-plus",
+          "question": "What is 9 * 8?",
+          "sample_input": "9 * 8",
+          "sample_output": "72",
+          "test_cases": [
+            {
+              "input": "9 * 8",
+              "expected_output": "72"
             }
           ]
         }
@@ -225,13 +253,27 @@
           "points": 1000,
           "reward": 2500,
           "difficulty": "extreme",
-          "question": "Design and implement a database transaction with ACID properties handling.",
-          "sample_input": "Banking system with transfers",
-          "sample_output": "Transaction implementation with rollback",
+          "question": "What is 100 - 25?",
+          "sample_input": "100 - 25",
+          "sample_output": "75",
           "test_cases": [
             {
-              "input": "Transfer between accounts",
-              "expected_output": "ACID compliant transaction"
+              "input": "100 - 25",
+              "expected_output": "75"
+            }
+          ]
+        },
+        {
+          "points": 1500,
+          "reward": 3000,
+          "difficulty": "extreme-plus",
+          "question": "What is 7 * 6?",
+          "sample_input": "7 * 6",
+          "sample_output": "42",
+          "test_cases": [
+            {
+              "input": "7 * 6",
+              "expected_output": "42"
             }
           ]
         }
@@ -300,13 +342,27 @@
           "points": 1000,
           "reward": 2500,
           "difficulty": "extreme",
-          "question": "Design a deadlock detection and recovery algorithm.",
-          "sample_input": "Resource allocation graph",
-          "sample_output": "Deadlock detection and recovery strategy",
+          "question": "What is 80 / 4?",
+          "sample_input": "80 / 4",
+          "sample_output": "20",
           "test_cases": [
             {
-              "input": "Multiple processes and resources",
-              "expected_output": "Cycle detection and victim selection"
+              "input": "80 / 4",
+              "expected_output": "20"
+            }
+          ]
+        },
+        {
+          "points": 1500,
+          "reward": 3000,
+          "difficulty": "extreme-plus",
+          "question": "What is 11 + 14?",
+          "sample_input": "11 + 14",
+          "sample_output": "25",
+          "test_cases": [
+            {
+              "input": "11 + 14",
+              "expected_output": "25"
             }
           ]
         }
@@ -375,13 +431,27 @@
           "points": 1000,
           "reward": 2500,
           "difficulty": "extreme",
-          "question": "Build a real-time chat application with WebSockets.",
-          "sample_input": "Multiple users, rooms, message history",
-          "sample_output": "Full-stack chat implementation",
+          "question": "What is 3 * 15?",
+          "sample_input": "3 * 15",
+          "sample_output": "45",
           "test_cases": [
             {
-              "input": "Multiple users in different rooms",
-              "expected_output": "Real-time messaging with room isolation"
+              "input": "3 * 15",
+              "expected_output": "45"
+            }
+          ]
+        },
+        {
+          "points": 1500,
+          "reward": 3000,
+          "difficulty": "extreme-plus",
+          "question": "What is 60 - 18?",
+          "sample_input": "60 - 18",
+          "sample_output": "42",
+          "test_cases": [
+            {
+              "input": "60 - 18",
+              "expected_output": "42"
             }
           ]
         }
@@ -450,88 +520,27 @@
           "points": 1000,
           "reward": 2500,
           "difficulty": "extreme",
-          "question": "Implement the A* pathfinding algorithm.",
-          "sample_input": "2D grid with obstacles, start and end points",
-          "sample_output": "Optimal path from start to end",
+          "question": "What is 45 + 35?",
+          "sample_input": "45 + 35",
+          "sample_output": "80",
           "test_cases": [
             {
-              "input": "10x10 grid with obstacles",
-              "expected_output": "Shortest path coordinates"
-            }
-          ]
-        }
-      ]
-    },
-    "ML": {
-      "name": "Machine Learning",
-      "questions": [
-        {
-          "points": 100,
-          "reward": 110,
-          "difficulty": "easy",
-          "question": "Implement linear regression from scratch.",
-          "sample_input": "X and y training data",
-          "sample_output": "Slope and intercept values",
-          "test_cases": [
-            {
-              "input": "Simple 2D dataset",
-              "expected_output": "Linear regression coefficients"
+              "input": "45 + 35",
+              "expected_output": "80"
             }
           ]
         },
         {
-          "points": 200,
-          "reward": 250,
-          "difficulty": "easy-medium",
-          "question": "Calculate accuracy, precision, and recall for a classification model.",
-          "sample_input": "True labels and predicted labels",
-          "sample_output": "Accuracy, precision, recall values",
+          "points": 1500,
+          "reward": 3000,
+          "difficulty": "extreme-plus",
+          "question": "What is 90 / 9?",
+          "sample_input": "90 / 9",
+          "sample_output": "10",
           "test_cases": [
             {
-              "input": "Binary classification results",
-              "expected_output": "Performance metrics"
-            }
-          ]
-        },
-        {
-          "points": 400,
-          "reward": 470,
-          "difficulty": "medium",
-          "question": "Implement k-means clustering algorithm.",
-          "sample_input": "Dataset and number of clusters k",
-          "sample_output": "Cluster centers and assignments",
-          "test_cases": [
-            {
-              "input": "2D points with k=3",
-              "expected_output": "3 cluster centers and point assignments"
-            }
-          ]
-        },
-        {
-          "points": 700,
-          "reward": 1000,
-          "difficulty": "hard",
-          "question": "Build a decision tree classifier from scratch.",
-          "sample_input": "Training dataset with features and labels",
-          "sample_output": "Decision tree structure and predictions",
-          "test_cases": [
-            {
-              "input": "Iris dataset",
-              "expected_output": "Decision tree with splitting criteria"
-            }
-          ]
-        },
-        {
-          "points": 1000,
-          "reward": 2500,
-          "difficulty": "extreme",
-          "question": "Implement a neural network with backpropagation.",
-          "sample_input": "Training data, network architecture",
-          "sample_output": "Trained network with weight updates",
-          "test_cases": [
-            {
-              "input": "XOR problem dataset",
-              "expected_output": "Neural network solving XOR"
+              "input": "90 / 9",
+              "expected_output": "10"
             }
           ]
         }
