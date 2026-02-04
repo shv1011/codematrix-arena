@@ -10,6 +10,7 @@ import { useAuth } from "@/components/auth/AuthContext";
 import { QuestionLoader, Round2Question, Round2Data } from "@/lib/questionLoader";
 import { aiEvaluationService, EvaluationRequest } from "@/lib/aiEvaluation";
 import { cumulativeScoring } from "@/lib/cumulativeScoring";
+import { ProgressPersistence, ConstraintProgress } from "@/lib/progressPersistence";
 import { CodeEditor } from "./CodeEditor";
 import { toast } from "sonner";
 import { 
@@ -77,6 +78,45 @@ export const ConstraintInterface = () => {
   const [gameState, setGameState] = useState<any>(null);
   const [selectedLanguage, setSelectedLanguage] = useState('javascript');
 
+  // Load saved progress when team is available
+  const loadSavedProgress = useCallback(async () => {
+    if (!team) return;
+
+    try {
+      const savedProgress = ProgressPersistence.loadConstraintProgress(team.id);
+      if (savedProgress && savedProgress.roundNumber === 2) {
+        setConstraintState(prev => ({
+          ...prev,
+          currentQuestionIndex: savedProgress.currentQuestionIndex,
+          submissions: savedProgress.submissions,
+          timeRemaining: savedProgress.timeRemaining,
+          totalScore: savedProgress.totalScore
+        }));
+        
+        toast.success("Previous progress restored!");
+      }
+    } catch (error) {
+      console.warn("Failed to load saved progress:", error);
+    }
+  }, [team]);
+
+  // Save progress periodically
+  const saveProgress = useCallback(() => {
+    if (!team || constraintState.isSubmitted) return;
+
+    const progressData: ConstraintProgress = {
+      teamId: team.id,
+      roundNumber: 2,
+      currentQuestionIndex: constraintState.currentQuestionIndex,
+      submissions: constraintState.submissions,
+      timeRemaining: constraintState.timeRemaining,
+      totalScore: constraintState.totalScore,
+      lastSaved: new Date().toISOString()
+    };
+
+    ProgressPersistence.saveConstraintProgress(progressData);
+  }, [team, constraintState.currentQuestionIndex, constraintState.submissions, constraintState.timeRemaining, constraintState.totalScore, constraintState.isSubmitted]);
+
   // Fetch team data
   const fetchTeam = useCallback(async () => {
     if (!user?.email) return;
@@ -143,6 +183,42 @@ export const ConstraintInterface = () => {
 
     initializeConstraint();
   }, [fetchTeam, fetchQuestions, fetchGameState]);
+
+  // Load saved progress after team and questions are loaded
+  useEffect(() => {
+    if (team && constraintState.questions.length > 0 && !constraintState.isSubmitted) {
+      loadSavedProgress();
+    }
+  }, [team, constraintState.questions.length, constraintState.isSubmitted, loadSavedProgress]);
+
+  // Setup auto-save when team is available
+  useEffect(() => {
+    if (team && !constraintState.isSubmitted) {
+      const cleanup = ProgressPersistence.setupAutoSave(
+        team.id,
+        2,
+        () => ({
+          teamId: team.id,
+          roundNumber: 2,
+          currentQuestionIndex: constraintState.currentQuestionIndex,
+          submissions: constraintState.submissions,
+          timeRemaining: constraintState.timeRemaining,
+          totalScore: constraintState.totalScore,
+          lastSaved: new Date().toISOString()
+        }),
+        20000 // Save every 20 seconds
+      );
+      
+      return cleanup;
+    }
+  }, [team, constraintState.currentQuestionIndex, constraintState.submissions, constraintState.timeRemaining, constraintState.totalScore, constraintState.isSubmitted]);
+
+  // Save progress when submissions change
+  useEffect(() => {
+    if (team && !constraintState.isSubmitted) {
+      saveProgress();
+    }
+  }, [team, constraintState.submissions, saveProgress, constraintState.isSubmitted]);
 
   // Timer countdown
   useEffect(() => {
@@ -337,6 +413,9 @@ export const ConstraintInterface = () => {
         isSubmitted: true,
         totalScore: totalScore
       }));
+
+      // Clear saved progress after successful submission
+      ProgressPersistence.clearConstraintProgress(team.id);
 
       toast.success(`Round 2 completed! Total score: ${totalScore} points`);
       setIsSubmitDialogOpen(false);

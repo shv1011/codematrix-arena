@@ -6,7 +6,7 @@ interface JeopardyQuestion {
   id: string;
   category: string;
   points: number;
-  reward_points: number;
+  reward: number; // Changed from reward_points to reward
   is_locked: boolean;
   answered_by: string | null;
   jeopardy_row: number;
@@ -36,20 +36,26 @@ export const JeopardyGrid = ({
   lockedQuestions = new Set(),
   gridData = []
 }: JeopardyGridProps) => {
-  // Extract actual categories and point values from grid data
-  const actualCategories = gridData.length > 0 ? 
-    gridData[0].map(q => q.category) : 
+  // If we have questions, extract categories and point values from them
+  const actualCategories = questions.length > 0 ? 
+    [...new Set(questions.map(q => q.category))] : 
     categories;
   
-  const actualPointValues = gridData.length > 0 ? 
-    gridData.map(row => row[0]?.points || 0) : 
+  const actualPointValues = questions.length > 0 ? 
+    [...new Set(questions.map(q => q.points))].sort((a, b) => a - b) : 
     [100, 200, 400, 700, 1000, 1500];
 
   const numCols = actualCategories.length;
   const numRows = actualPointValues.length;
 
+  console.log("JeopardyGrid - Categories:", actualCategories);
+  console.log("JeopardyGrid - Point values:", actualPointValues);
+  console.log("JeopardyGrid - Questions:", questions);
+
   const getQuestionByPosition = (row: number, col: number) => {
-    return questions.find(q => q.jeopardy_row === row && q.jeopardy_col === col);
+    const categoryName = actualCategories[col];
+    const pointValue = actualPointValues[row];
+    return questions.find(q => q.category === categoryName && q.points === pointValue);
   };
 
   const getRewardPoints = (question: any) => {

@@ -37,12 +37,10 @@ export class CodeEvaluator {
         };
       }
 
-      // Basic security check - prevent dangerous operations
+      // Minimal security check - only block truly dangerous operations
       const dangerousPatterns = [
         /eval\s*\(/,
         /Function\s*\(/,
-        /setTimeout\s*\(/,
-        /setInterval\s*\(/,
         /XMLHttpRequest/,
         /fetch\s*\(/,
         /import\s+/,
@@ -52,8 +50,7 @@ export class CodeEvaluator {
         /window\./,
         /document\./,
         /localStorage/,
-        /sessionStorage/,
-        /console\.log/i
+        /sessionStorage/
       ];
 
       for (const pattern of dangerousPatterns) {
@@ -192,30 +189,57 @@ export class CodeEvaluator {
     }
   }
 
-  // Safe evaluation with limited scope
+  // Safe evaluation with expanded scope for complex JavaScript
   private static safeEval(code: string): any {
-    // Create a very limited execution context
+    // Create a comprehensive execution context with most JavaScript features
     const context = {
+      // Basic types and constructors
       Math: Math,
       String: String,
       Number: Number,
       Array: Array,
       Object: Object,
       JSON: JSON,
+      Date: Date,
+      RegExp: RegExp,
+      Error: Error,
+      
+      // Utility functions
       parseInt: parseInt,
       parseFloat: parseFloat,
       isNaN: isNaN,
-      isFinite: isFinite
+      isFinite: isFinite,
+      encodeURIComponent: encodeURIComponent,
+      decodeURIComponent: decodeURIComponent,
+      
+      // Console for debugging (safe version)
+      console: {
+        log: (...args: any[]) => {
+          // Allow console.log for debugging but don't actually log to avoid spam
+          return args;
+        }
+      },
+      
+      // Common array and string methods are available through prototypes
+      // setTimeout and setInterval with limited functionality for algorithms
+      setTimeout: (fn: Function, delay: number) => {
+        if (delay > 10000) throw new Error("Timeout too long");
+        return setTimeout(fn, Math.min(delay, 1000));
+      },
+      
+      // Allow undefined and null
+      undefined: undefined,
+      null: null
     };
 
     try {
-      // Create function with limited scope
+      // Create function with expanded scope
       const func = new Function(...Object.keys(context), `
         "use strict";
         ${code}
       `);
 
-      // Execute with limited context
+      // Execute with expanded context
       return func(...Object.values(context));
     } catch (error) {
       throw new Error(`Execution error: ${error.message}`);
@@ -237,23 +261,22 @@ export class CodeEvaluator {
     };
   }
 
-  // Auto-detect language and evaluate
+  // Auto-detect language and evaluate - Always use AI for comprehensive evaluation
   static evaluateCode(
     userCode: string,
     testCases: TestCase[],
     points: number,
     language?: string
   ): CodeEvaluationResult {
-    const detectedLanguage = language || this.detectLanguage(userCode);
-    
-    switch (detectedLanguage) {
-      case 'javascript':
-        return this.evaluateJavaScript(userCode, testCases, points);
-      case 'python':
-        return this.evaluatePython(userCode, testCases, points);
-      default:
-        return this.evaluateJavaScript(userCode, testCases, points);
-    }
+    // For now, always return a message to use AI evaluation
+    // This ensures all code, regardless of language, gets proper evaluation
+    return {
+      isCorrect: false,
+      points: 0,
+      feedback: "Code evaluation is handled by AI system for comprehensive language support. Please submit your solution for AI evaluation.",
+      testResults: [],
+      executionError: "Use AI evaluation for all languages and complex code"
+    };
   }
 
   // Simple language detection

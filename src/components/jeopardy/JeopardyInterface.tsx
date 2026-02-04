@@ -96,18 +96,24 @@ export const JeopardyInterface = () => {
   // Fetch jeopardy questions from JSON and database
   const fetchQuestions = useCallback(async () => {
     try {
+      console.log("Loading Round 3 questions...");
       const roundData = await QuestionLoader.loadRound3Questions();
+      console.log("Round 3 data loaded:", roundData);
       
       // Convert to grid format and add database info
       const gridQuestions = QuestionLoader.convertRound3ToGrid(roundData);
+      console.log("Grid questions:", gridQuestions);
+      
       const flatQuestions = gridQuestions.flat().map((q, index) => ({
         ...q,
         id: `jeopardy_${index}`,
-        jeopardy_row: Math.floor(index / 7),
-        jeopardy_col: index % 7,
+        jeopardy_row: Math.floor(index / Object.keys(roundData.categories).length),
+        jeopardy_col: index % Object.keys(roundData.categories).length,
         is_locked: false,
         answered_by: null
       }));
+
+      console.log("Flat questions:", flatQuestions);
 
       setJeopardyState(prev => ({
         ...prev,
@@ -512,6 +518,7 @@ export const JeopardyInterface = () => {
               categories={Object.keys(jeopardyState.roundData?.categories || {})}
               currentTeam={team.team_name}
               lockedQuestions={getLockedQuestionIds()}
+              gridData={jeopardyState.roundData ? QuestionLoader.convertRound3ToGrid(jeopardyState.roundData) : []}
             />
           </CardContent>
         </Card>

@@ -1,7 +1,7 @@
-import { CodeEvaluator, CodeEvaluationResult, TestCase } from "./codeEvaluator";
+import { MultiLanguageEvaluator, CodeEvaluationResult, TestCase } from "./multiLanguageEvaluator";
 
 // Simple answer evaluator for basic questions
-// Handles math questions, MCQ, and delegates coding to CodeEvaluator
+// Handles math questions, MCQ, and delegates coding to MultiLanguageEvaluator
 
 export interface SimpleEvaluationResult {
   isCorrect: boolean;
@@ -13,6 +13,7 @@ export interface SimpleEvaluationResult {
     actual: string;
     passed: boolean;
   }>;
+  language?: string;
 }
 
 export class SimpleEvaluator {
@@ -85,20 +86,21 @@ export class SimpleEvaluator {
     }
   }
 
-  // Evaluate coding questions (Round 2 & 3) with proper code execution
+  // Evaluate coding questions (Round 2 & 3) with multi-language support
   static evaluateCode(
     userCode: string,
     testCases: TestCase[],
     points: number
   ): SimpleEvaluationResult {
     try {
-      const result = CodeEvaluator.evaluateCode(userCode, testCases, points);
+      const result = MultiLanguageEvaluator.evaluateCode(userCode, testCases, points);
       
       return {
         isCorrect: result.isCorrect,
         points: result.points,
         feedback: result.feedback,
-        testResults: result.testResults
+        testResults: result.testResults,
+        language: result.language
       };
       
     } catch (error) {

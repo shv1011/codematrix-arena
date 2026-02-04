@@ -102,14 +102,14 @@ class OpenAIEvaluator {
 
   private buildEvaluationPrompt(request: EvaluationRequest): string {
     return `
-Evaluate the following code submission:
+You are an expert code evaluator. Evaluate the following submission regardless of programming language, complexity, or format. Your job is to determine if the solution is correct.
 
 **Question:** ${request.question}
 
 **Constraints:**
 ${request.constraints.map(c => `- ${c}`).join('\n')}
 
-**User Code:**
+**User Submission:**
 \`\`\`
 ${request.userCode}
 \`\`\`
@@ -123,13 +123,28 @@ Expected Output: ${tc.expected_output}
 
 **Evaluation Criteria:** ${request.evaluationCriteria}
 
-Please evaluate:
-1. Does the code violate any constraints?
-2. Does it produce correct outputs for all test cases?
-3. Is the logic sound and efficient?
-4. Provide specific feedback and reasoning.
+IMPORTANT INSTRUCTIONS:
+- Evaluate ANY programming language (JavaScript, Python, Java, C++, C#, Go, Rust, etc.)
+- Evaluate pseudocode, natural language descriptions, or algorithm explanations
+- Focus on correctness of logic and approach, not syntax perfection
+- If the solution demonstrates understanding and would work with minor fixes, consider it correct
+- Be lenient with syntax errors if the logic is sound
+- Evaluate complex algorithms, data structures, and advanced concepts
+- Always provide constructive feedback
 
-Respond with a JSON object only, no additional text.
+Respond with ONLY a JSON object containing:
+{
+  "isCorrect": boolean,
+  "score": number (0-100),
+  "feedback": "detailed feedback string",
+  "reasoning": "explanation of evaluation",
+  "constraintViolations": ["array of violations if any"],
+  "executionResult": {
+    "passed": boolean,
+    "output": "expected output or explanation",
+    "error": "error description if any"
+  }
+}
     `.trim();
   }
 
@@ -229,14 +244,14 @@ class GeminiEvaluator {
 
   private buildEvaluationPrompt(request: EvaluationRequest): string {
     return `
-You are a code evaluation expert. Analyze the provided code against constraints and test cases.
+You are an expert code evaluator. Evaluate the following submission regardless of programming language, complexity, or format. Your job is to determine if the solution is correct.
 
 **Question:** ${request.question}
 
 **Constraints:**
 ${request.constraints.map(c => `- ${c}`).join('\n')}
 
-**User Code:**
+**User Submission:**
 \`\`\`
 ${request.userCode}
 \`\`\`
@@ -250,15 +265,28 @@ Expected Output: ${tc.expected_output}
 
 **Evaluation Criteria:** ${request.evaluationCriteria}
 
-Evaluate the code and respond with ONLY a JSON object containing:
-- isCorrect: boolean (true if code meets all requirements)
-- score: number (0-100 based on correctness and quality)
-- feedback: string (constructive feedback for the user)
-- reasoning: string (detailed explanation of evaluation)
-- constraintViolations: array of strings (list any constraint violations)
-- executionResult: object with "passed" boolean and optional "output" or "error" strings
+IMPORTANT INSTRUCTIONS:
+- Evaluate ANY programming language (JavaScript, Python, Java, C++, C#, Go, Rust, etc.)
+- Evaluate pseudocode, natural language descriptions, or algorithm explanations
+- Focus on correctness of logic and approach, not syntax perfection
+- If the solution demonstrates understanding and would work with minor fixes, consider it correct
+- Be lenient with syntax errors if the logic is sound
+- Evaluate complex algorithms, data structures, and advanced concepts
+- Always provide constructive feedback
 
-Respond with JSON only, no additional text or formatting.
+Respond with ONLY a JSON object containing:
+{
+  "isCorrect": boolean,
+  "score": number (0-100),
+  "feedback": "detailed feedback string",
+  "reasoning": "explanation of evaluation",
+  "constraintViolations": ["array of violations if any"],
+  "executionResult": {
+    "passed": boolean,
+    "output": "expected output or explanation",
+    "error": "error description if any"
+  }
+}
     `.trim();
   }
 

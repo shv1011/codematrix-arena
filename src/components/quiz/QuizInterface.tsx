@@ -12,6 +12,7 @@ import { aiEvaluationService, EvaluationRequest } from "@/lib/aiEvaluation";
 import { cumulativeScoring } from "@/lib/cumulativeScoring";
 import { performanceMonitor } from "@/lib/performance";
 import { validateSubmissionForm, submissionRateLimiter } from "@/lib/validation";
+import { ProgressPersistence, QuizProgress } from "@/lib/progressPersistence";
 import { toast } from "sonner";
 import { 
   Clock, 
@@ -61,6 +62,7 @@ export const QuizInterface = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitDialogOpen, setIsSubmitDialogOpen] = useState(false);
   const [gameState, setGameState] = useState<any>(null);
+  const [autoSaveCleanup, setAutoSaveCleanup] = useState<(() => void) | null>(null);
 
   // Fetch team data
   const fetchTeam = useCallback(async () => {
@@ -105,6 +107,43 @@ export const QuizInterface = () => {
     }
   }, [team?.id]);
 
+  // Load saved progress when team is available
+  const loadSavedProgress = useCallback(async () => {
+    if (!team) return;
+
+    try {
+      const savedProgress = ProgressPersistence.loadQuizProgress(team.id);
+      if (savedProgress && savedProgress.roundNumber === 1) {
+        setQuizState(prev => ({
+          ...prev,
+          currentQuestionIndex: savedProgress.currentQuestionIndex,
+          answers: savedProgress.answers,
+          timeRemaining: savedProgress.timeRemaining
+        }));
+        
+        toast.success("Previous progress restored!");
+      }
+    } catch (error) {
+      console.warn("Failed to load saved progress:", error);
+    }
+  }, [team]);
+
+  // Save progress periodically
+  const saveProgress = useCallback(() => {
+    if (!team || quizState.isSubmitted) return;
+
+    const progressData: QuizProgress = {
+      teamId: team.id,
+      roundNumber: 1,
+      currentQuestionIndex: quizState.currentQuestionIndex,
+      answers: quizState.answers,
+      timeRemaining: quizState.timeRemaining,
+      lastSaved: new Date().toISOString()
+    };
+
+    ProgressPersistence.saveQuizProgress(progressData);
+  }, [team, quizState.currentQuestionIndex, quizState.answers, quizState.timeRemaining, quizState.isSubmitted]);
+
   // Fetch game state
   const fetchGameState = useCallback(async () => {
     try {
@@ -130,6 +169,43 @@ export const QuizInterface = () => {
 
     initializeQuiz();
   }, [fetchTeam, fetchQuestions, fetchGameState]);
+
+  // Load saved progress after team and questions are loaded
+  useEffect(() => {
+    if (team && quizState.questions.length > 0 && !quizState.isSubmitted) {
+      loadSavedProgress();
+    }
+  }, [team, quizState.questions.length, quizState.isSubmitted, loadSavedProgress]);
+
+  // Setup auto-save when team is available
+  useEffect(() => {
+    if (team && !quizState.isSubmitted) {
+      const cleanup = ProgressPersistence.setupAutoSave(
+        team.id,
+        1,
+        () => ({
+          teamId: team.id,
+          roundNumber: 1,
+          currentQuestionIndex: quizState.currentQuestionIndex,
+          answers: quizState.answers,
+          timeRemaining: quizState.timeRemaining,
+          lastSaved: new Date().toISOString()
+        }),
+        15000 // Save every 15 seconds
+      );
+      
+      setAutoSaveCleanup(() => cleanup);
+      
+      return cleanup;
+    }
+  }, [team, quizState.currentQuestionIndex, quizState.answers, quizState.timeRemaining, quizState.isSubmitted]);
+
+  // Save progress when answers change
+  useEffect(() => {
+    if (team && !quizState.isSubmitted) {
+      saveProgress();
+    }
+  }, [team, quizState.answers, saveProgress, quizState.isSubmitted]);
 
   // Timer countdown
   useEffect(() => {
@@ -259,6 +335,9 @@ export const QuizInterface = () => {
         isEvaluating: false,
         score: totalScore
       }));
+
+      // Clear saved progress after successful submission
+      ProgressPersistence.clearQuizProgress(team.id);
 
       // Record performance metrics
       const submitDuration = performance.now() - submitStartTime;

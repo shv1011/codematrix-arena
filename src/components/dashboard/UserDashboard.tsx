@@ -268,7 +268,8 @@ export const UserDashboard = () => {
           console.error("Score update error:", updateError);
           toast.error("Failed to update score");
         } else {
-          toast.success(`Correct! +${evaluationResult.points} points`);
+          const languageInfo = evaluationResult.language ? ` (${evaluationResult.language.toUpperCase()})` : '';
+          toast.success(`Correct${languageInfo}! +${evaluationResult.points} points`);
           // Track this question as correctly answered
           setAttemptedQuestions(prev => new Map(prev.set(selectedQuestion.id, { 
             isCorrect: true, 
@@ -282,7 +283,8 @@ export const UserDashboard = () => {
           } : null);
         }
       } else {
-        toast.error(evaluationResult.feedback || "Incorrect answer. Try again!");
+        const languageInfo = evaluationResult.language ? ` (${evaluationResult.language.toUpperCase()})` : '';
+        toast.error(`${evaluationResult.feedback}${languageInfo}`);
         // Track this question as incorrectly answered
         setAttemptedQuestions(prev => new Map(prev.set(selectedQuestion.id, { 
           isCorrect: false, 
@@ -350,7 +352,8 @@ export const UserDashboard = () => {
           console.error("Score update error:", updateError);
           toast.error("Failed to update score");
         } else {
-          toast.success(`Correct! +${evaluationResult.points} points`);
+          const languageInfo = evaluationResult.language ? ` (${evaluationResult.language.toUpperCase()})` : '';
+          toast.success(`Correct${languageInfo}! +${evaluationResult.points} points`);
           
           // Mark this question as answered by this team
           setJeopardyAnswered(prev => new Map(prev.set(selectedQuestion.id.toString(), team.team_name)));
@@ -363,7 +366,8 @@ export const UserDashboard = () => {
           } : null);
         }
       } else {
-        toast.error(evaluationResult.feedback || "Incorrect answer. Try again!");
+        const languageInfo = evaluationResult.language ? ` (${evaluationResult.language.toUpperCase()})` : '';
+        toast.error(`${evaluationResult.feedback}${languageInfo}`);
       }
 
       setAnswer("");
